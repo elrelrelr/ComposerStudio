@@ -1,0 +1,502 @@
+/* Estilos generales */
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.hero-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 2rem;
+    color: white;
+}
+
+.hero-section h1 {
+    color: white !important;
+}
+
+.hero-section p {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Vista previa */
+.vista-previa {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    position: relative;
+    overflow-y: auto;
+    max-height: 80vh;
+    transition: all 0.3s ease;
+}
+
+#preview-content {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.seccion {
+    margin-bottom: 30px;
+    border-left: 4px solid #3498db;
+    padding-left: 20px;
+    transition: all 0.3s ease;
+    page-break-inside: avoid;
+}
+
+.seccion:hover {
+    border-left-color: #e74c3c;
+    background-color: #f9f9f9;
+}
+
+.seccion-titulo {
+    font-size: 20px;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 15px;
+    padding: 8px 12px;
+    background-color: #ecf0f1;
+    border-radius: 8px;
+    cursor: text;
+    outline: none;
+}
+
+.seccion-titulo:focus {
+    background-color: #e8f4fd;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
+}
+
+.btn-duplicar-instrumento {
+    background: #e9ecef;
+    border: none;
+    color: #495057;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.2s;
+    margin-left: 10px;
+    opacity: 0; /* Oculto por defecto */
+    pointer-events: none;
+}
+
+.seccion:hover .btn-duplicar-instrumento,
+.seccion:focus-within .btn-duplicar-instrumento {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.btn-duplicar-instrumento:hover {
+    background: #dee2e6;
+    color: #667eea;
+    transform: scale(1.1);
+}
+
+.acordes {
+    position: relative;
+    font-family: 'Consolas', 'Monaco', 'Lucida Console', 'Liberation Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 17px;
+    line-height: 1.6;
+    letter-spacing: 0.3px;
+    background-color: #fffdf7;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #f1e9d2;
+    min-height: 100px;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.acordes.drawing-mode {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 0 L16 32 M0 16 L32 16" stroke="%23e74c3c" stroke-width="3" fill="none"/></svg>') 16 16, crosshair;
+}
+
+#paintColorPickerBarra {
+    width: 40px;
+    height: 34px;
+    padding: 2px;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    background: white;
+    cursor: pointer;
+}
+
+.btn-group-paint {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 10px;
+    border-radius: 8px;
+    margin-top: 5px;
+}
+
+#paintBrushSizeBarra {
+    cursor: pointer;
+    accent-color: #764ba2;
+}
+
+.acordes-content {
+    position: relative;
+    z-index: 2;
+    white-space: pre-wrap;
+    word-break: break-word;
+    outline: none;
+    min-height: 100px;
+    line-height: 1.8;
+}
+
+.acordes-content:focus {
+    background-color: #fff8e7;
+}
+
+.acorde-linea {
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    outline: none;
+    cursor: text;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.acorde-linea:focus {
+    background-color: #fff3cd;
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.3);
+}
+
+/* Estilo especial para Break */
+.seccion-break {
+    padding: 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.break-line {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, #dee2e6 0%, #adb5bd 50%, #dee2e6 100%);
+    border-radius: 2px;
+}
+
+.break-label {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 12px;
+}
+
+.acordes-paint-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.acordes.drawing-mode .acordes-paint-overlay {
+    pointer-events: auto;
+}
+
+.acordes-paint-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.acordes.drawing-mode .acordes-paint-canvas {
+    pointer-events: auto;
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 0 L16 32 M0 16 L32 16" stroke="%23e74c3c" stroke-width="3" fill="none"/></svg>') 16 16, crosshair;
+}
+
+.acordes.drawing-mode .acordes-content {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Modo exportación */
+body.export-mode * {
+    overflow-anchor: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+body.export-mode .no-print {
+    display: none !important;
+}
+
+body.export-mode .vista-previa {
+    max-height: none;
+    overflow: visible;
+    padding: 20px;
+    box-shadow: none;
+}
+
+body.export-mode .btn,
+body.export-mode .barra-flotante,
+body.export-mode #barraFlotanteContainer {
+    display: none !important;
+}
+
+/* Barra flotante */
+.barra-flotante {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 320px;
+    z-index: 9999;
+    transform: translateX(100%);
+    transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.barra-flotante.show {
+    transform: translateX(0);
+}
+
+.barra-flotante.dragging {
+    opacity: 0.8;
+    cursor: grabbing !important;
+}
+
+.flotante-acordes,
+.flotante-orden {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    margin-bottom: 15px;
+    overflow: hidden;
+    border: 1px solid #dee2e6;
+}
+
+.flotante-title {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 15px;
+    font-weight: bold;
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.btn-toggle-flotante {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-toggle-flotante:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.flotante-orden.collapsed .btn-group-orden,
+.flotante-orden.collapsed .paint-controls-barra {
+    display: none !important;
+}
+
+.flotante-orden.collapsed {
+    margin-bottom: 5px;
+}
+
+.btn-group-musical {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 15px;
+    background: #f8f9fa;
+}
+
+.btn-musical {
+    font-size: 13px;
+    padding: 6px 10px;
+    min-width: 45px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.btn-musical:hover {
+    transform: scale(1.05);
+}
+
+.btn-group-orden {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 15px;
+    background: #f8f9fa;
+}
+
+.btn-group-orden .btn {
+    flex: 1;
+    min-width: 50px;
+}
+
+.texto-barra {
+    padding: 0 15px 15px 15px;
+}
+
+.barra-flotante-close {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #dc3545;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s ease;
+    z-index: 10000;
+}
+
+.barra-flotante-close:hover {
+    transform: scale(1.1);
+    background: #c82333;
+}
+
+/* Controles de paint */
+.paint-controls-barra {
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    padding: 12px;
+}
+
+.paint-title {
+    font-size: 12px;
+    font-weight: bold;
+    color: #6c757d;
+    margin-bottom: 10px;
+}
+
+.btn-group-paint {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.paint-color-picker-barra {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.paint-brush-size-barra {
+    flex: 1;
+    min-width: 80px;
+}
+
+/* Animaciones */
+@keyframes fadeOut {
+    0% { opacity: 1; transform: translateY(0); }
+    70% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-20px); display: none; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .vista-previa {
+        padding: 15px;
+    }
+    
+    .seccion {
+        padding-left: 10px;
+    }
+    
+    .barra-flotante {
+        width: 280px;
+        bottom: 10px;
+        right: 10px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    .barra-flotante.show {
+        transform: none !important;
+    }
+    }
+
+    .btn-musical {
+        font-size: 11px;
+        padding: 4px 8px;
+        min-width: 38px;
+    }
+}
+
+/* Menú Contextual */
+.custom-context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    padding: 5px 0;
+    z-index: 10002;
+    min-width: 180px;
+    display: none;
+}
+
+.context-menu-item {
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: #f8f9fa;
+    color: #667eea;
+}
+
+.context-menu-item i {
+    font-size: 16px;
+}
+    
+    .vista-previa {
+        padding: 0;
+        box-shadow: none;
+        max-height: none;
+        overflow: visible;
+    }
+    
+    .seccion {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+    
+    .acordes {
+        background-color: white;
+        border: 1px solid #ddd;
+    }
+}
