@@ -492,3 +492,153 @@ body.export-mode #barraFlotanteContainer {
         border: 1px solid #ddd;
     }
 }
+/* Metrónomo */
+.metronome-wrapper {
+    transition: all 0.3s ease;
+}
+
+.metronome-light {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: #dee2e6;
+    transition: background-color 0.1s ease, transform 0.1s ease;
+    border: 2px solid rgba(0,0,0,0.1);
+}
+
+.metronome-light.active {
+    background-color: #ffc107;
+    box-shadow: 0 0 15px #ffc107;
+    transform: scale(1.2);
+}
+
+.metronome-light.strong {
+    background-color: #dc3545;
+    box-shadow: 0 0 15px #dc3545;
+}
+
+/* Piano Virtual */
+.piano {
+    display: flex;
+    position: relative;
+    justify-content: flex-start;
+    overflow-x: auto;
+    margin: 20px 0;
+    background: linear-gradient(145deg, #2c3e50 0%, #1a252f 100%);
+    padding: 30px 20px 40px 20px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    scrollbar-width: thin;
+    scrollbar-color: #ffc107 #2c3e50;
+}
+
+.piano::-webkit-scrollbar {
+    height: 8px;
+}
+
+.piano::-webkit-scrollbar-track {
+    background: #2c3e50;
+    border-radius: 10px;
+}
+
+.piano::-webkit-scrollbar-thumb {
+    background: #ffc107;
+    border-radius: 10px;
+}
+
+.piano-key {
+    cursor: pointer;
+    transition: all 0.1s ease;
+    user-select: none;
+    text-align: center;
+    font-weight: bold;
+}
+
+.piano-key.white {
+    background: linear-gradient(145deg, #ffffff 0%, #f0f0f0 100%);
+    width: 70px;
+    height: 180px;
+    border: 1px solid #ccc;
+    border-radius: 0 0 8px 8px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 15px;
+    font-size: 14px;
+    color: #333;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    z-index: 1;
+}
+
+.piano-key.white:hover {
+    background: linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%);
+    transform: translateY(-2px);
+}
+
+.piano-key.white:active {
+    transform: translateY(4px);
+    background: #e0e0e0;
+}
+
+.piano-key.black {
+    background: linear-gradient(145deg, #2c3e50 0%, #1a252f 100%);
+    width: 45px;
+    height: 110px;
+    margin-left: -22px;
+    margin-right: -22px;
+    border-radius: 0 0 5px 5px;
+    color: white;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 10px;
+    font-size: 12px;
+    z-index: 2;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.piano-key.black:hover {
+    background: linear-gradient(145deg, #34495e 0%, #2c3e50 100%);
+    transform: translateY(-2px);
+}
+
+.piano-key.black:active {
+    transform: translateY(4px);
+}
+
+.piano-key.active {
+    transform: translateY(6px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.piano-key.marked-persistent.white {
+    background: linear-gradient(145deg, #ffeb3b 0%, #fbc02d 100%) !important;
+    border-color: #fbc02d;
+}
+
+.piano-key.marked-persistent.black {
+    background: linear-gradient(145deg, #fbc02d 0%, #f9a825 100%) !important;
+    color: black;
+}
+
+@media (max-width: 768px) {
+    .piano {
+        overflow-x: auto;
+        justify-content: flex-start;
+        padding: 20px 10px;
+    }
+    
+    .piano-key.white {
+        width: 50px;
+        height: 140px;
+        font-size: 11px;
+    }
+    
+    .piano-key.black {
+        width: 35px;
+        height: 85px;
+        margin-left: -17px;
+        margin-right: -17px;
+        font-size: 9px;
+    }
+}

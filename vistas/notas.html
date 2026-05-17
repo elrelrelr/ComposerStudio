@@ -55,11 +55,15 @@
 
             <!-- Información de la canción -->
             <div class="card shadow-lg border-0 mb-4 no-print">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h2 class="mb-0 fs-4">
                         <i class="bi bi-info-circle me-2"></i>
                         Información de la Canción
                     </h2>
+                    <button class="btn btn-warning btn-sm fw-bold" onclick="tocarCancionCompletaEnPiano()">
+                        <i class="bi bi-play-circle-fill me-1"></i>
+                        Tocar Canción Completa
+                    </button>
                 </div>
                 <div class="card-body p-4">
                     <div class="row g-3">
@@ -241,7 +245,108 @@
                 </div>
             </div>
         </div>
+<!-- Botón para mostrar/ocultar piano - cerca de los botones de acción -->
+<div class="row g-3 mb-5 no-print">
+    <div class="col-md-3 col-6">
+        <button class="btn btn-warning btn-lg w-100" onclick="togglePiano()" id="btnTogglePiano">
+            <i class="bi bi-piano me-2"></i>
+            Piano Virtual
+        </button>
+    </div>
+    <div class="col-md-3 col-6">
+        <button class="btn btn-success btn-lg w-100" onclick="exportarMarkdown()">
+            <i class="bi bi-markdown me-2"></i>
+            MD
+        </button>
+    </div>
+    <!-- ... resto de botones ... -->
+</div>
 
+<!-- Piano Virtual (oculto por defecto) -->
+<div class="card shadow-lg border-0 mb-4 no-print" id="pianoContainer" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h2 class="mb-0 fs-4">
+            <i class="bi bi-piano me-2"></i>
+            Piano Virtual
+            <button class="btn btn-sm btn-dark float-end" onclick="togglePiano()">✕</button>
+        </h2>
+    </div>
+    <div class="card-body p-3">
+        <div class="text-center mb-3">
+            <div id="pianoDisplay" class="fs-3 fw-bold text-primary mb-2" style="min-height: 40px; transition: all 0.3s ease;"></div>
+            
+            <!-- Metrónomo -->
+            <div class="metronome-wrapper d-flex align-items-center justify-content-center gap-3 p-2 bg-light rounded-pill mb-3 shadow-sm mx-auto" style="max-width: 400px;">
+                <div class="metronome-light" id="metronomeLight"></div>
+                <div class="d-flex align-items-center gap-2 flex-grow-1">
+                    <i class="bi bi-speedometer2 text-muted"></i>
+                    <input type="range" class="form-range" id="bpmSlider" min="40" max="220" value="120" oninput="actualizarBPM(this.value)">
+                    <span class="badge bg-dark" id="bpmLabel" style="min-width: 65px;">120 BPM</span>
+                </div>
+                <button class="btn btn-sm btn-outline-primary rounded-circle" id="btnMetronomo" onclick="toggleMetronomo()" title="Activar/Desactivar Metrónomo">
+                    <i class="bi bi-metronome"></i>
+                </button>
+            </div>
+
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i> Haz clic en las teclas para insertar el acorde en la sección activa
+            </small>
+        </div>
+        <div class="piano" id="piano">
+            <!-- Octava 3 -->
+            <div class="piano-key white" data-note="C" data-octave="3">Do</div>
+            <div class="piano-key black" data-note="C#" data-octave="3">C#</div>
+            <div class="piano-key white" data-note="D" data-octave="3">Re</div>
+            <div class="piano-key black" data-note="D#" data-octave="3">D#</div>
+            <div class="piano-key white" data-note="E" data-octave="3">Mi</div>
+            <div class="piano-key white" data-note="F" data-octave="3">Fa</div>
+            <div class="piano-key black" data-note="F#" data-octave="3">F#</div>
+            <div class="piano-key white" data-note="G" data-octave="3">Sol</div>
+            <div class="piano-key black" data-note="G#" data-octave="3">G#</div>
+            <div class="piano-key white" data-note="A" data-octave="3">La</div>
+            <div class="piano-key black" data-note="A#" data-octave="3">A#</div>
+            <div class="piano-key white" data-note="B" data-octave="3">Si</div>
+            
+            <!-- Octava 4 -->
+            <div class="piano-key white" data-note="C" data-octave="4">Do</div>
+            <div class="piano-key black" data-note="C#" data-octave="4">C#</div>
+            <div class="piano-key white" data-note="D" data-octave="4">Re</div>
+            <div class="piano-key black" data-note="D#" data-octave="4">D#</div>
+            <div class="piano-key white" data-note="E" data-octave="4">Mi</div>
+            <div class="piano-key white" data-note="F" data-octave="4">Fa</div>
+            <div class="piano-key black" data-note="F#" data-octave="4">F#</div>
+            <div class="piano-key white" data-note="G" data-octave="4">Sol</div>
+            <div class="piano-key black" data-note="G#" data-octave="4">G#</div>
+            <div class="piano-key white" data-note="A" data-octave="4">La</div>
+            <div class="piano-key black" data-note="A#" data-octave="4">A#</div>
+            <div class="piano-key white" data-note="B" data-octave="4">Si</div>
+
+            <!-- Octava 5 -->
+            <div class="piano-key white" data-note="C" data-octave="5">Do</div>
+            <div class="piano-key black" data-note="C#" data-octave="5">C#</div>
+            <div class="piano-key white" data-note="D" data-octave="5">Re</div>
+            <div class="piano-key black" data-note="D#" data-octave="5">D#</div>
+            <div class="piano-key white" data-note="E" data-octave="5">Mi</div>
+            <div class="piano-key white" data-note="F" data-octave="5">Fa</div>
+            <div class="piano-key black" data-note="F#" data-octave="5">F#</div>
+            <div class="piano-key white" data-note="G" data-octave="5">Sol</div>
+            <div class="piano-key black" data-note="G#" data-octave="5">G#</div>
+            <div class="piano-key white" data-note="A" data-octave="5">La</div>
+            <div class="piano-key black" data-note="A#" data-octave="5">A#</div>
+            <div class="piano-key white" data-note="B" data-octave="5">Si</div>
+        </div>
+        <div class="text-center mt-3">
+            <div class="btn-group" role="group">
+                <button class="btn btn-sm btn-outline-secondary" onclick="insertarAcordePiano('m')">menor</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="insertarAcordePiano('7')">7ª</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="insertarAcordePiano('maj7')">maj7</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="insertarAcordePiano('dim')">dim</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="resetAcordePiano()">Reset</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="limpiarMarcasPiano()">Limpiar Piano</button>
+            </div>
+        </div>
+    </div>
+</div>
         <!-- Barra flotante de acordes -->
         <div class="barra-flotante" id="barraFlotanteContainer" style="display: none;">
             <div class="flotante-acordes">

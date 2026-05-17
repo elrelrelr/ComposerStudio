@@ -52,6 +52,12 @@ function formatearTextoAcordes(texto) {
 
     let lineas = texto.split('\n');
     let nuevasLineas = lineas.map(linea => {
+        // Normalizar espacios alrededor de barras de compás y colapsar espacios múltiples
+        linea = linea.replace(/\s{2,}/g, ' '); // Colapsar múltiples espacios a uno solo
+        linea = linea.replace(/\|\s+/g, '| '); // Máximo un espacio después de |
+        linea = linea.replace(/\s+\|/g, ' |'); // Máximo un espacio antes de |
+        linea = linea.trim();
+
         linea = linea.replace(rule1Regex, '$1/$2');
         
         let antes = "";
@@ -115,7 +121,9 @@ function agregarSeccion(tipo) {
         tipo: tipo, 
         acordes: '', 
         paintData: null,
-        tonalidadSugerida: null
+        tonalidadSugerida: null,
+        tiempo: null, // null usa el global
+        bpm: null    // null usa el global
     });
     
     // Forzar que la nueva sección sea el objetivo del foco
@@ -126,6 +134,37 @@ function agregarSeccion(tipo) {
     guardarTodasLasSecciones();
     actualizarVistaPrevia();
     mostrarBarraFlotante();
+}
+
+function cambiarTiempoSeccion(id) {
+    const seccion = secciones.find(s => s.id === id);
+    if (!seccion) return;
+
+    const opciones = ["4/4", "3/4", "2/4", "6/8", "12/8", "Global"];
+    const actual = seccion.tiempo || "Global";
+    let siguienteIdx = (opciones.indexOf(actual) + 1) % opciones.length;
+    let siguiente = opciones[siguienteIdx];
+
+    seccion.tiempo = siguiente === "Global" ? null : siguiente;
+    
+    mostrarNotificacion(`Compás de la sección actualizado a: ${siguiente}`, 'info');
+    actualizarVistaPrevia();
+}
+
+function cambiarBpmSeccion(id) {
+    const seccion = secciones.find(s => s.id === id);
+    if (!seccion) return;
+
+    // Rotar BPM: Global -> 60 -> 80 -> 100 -> 120 -> 140 -> 160
+    const opciones = ["Global", 60, 80, 100, 120, 140, 160];
+    const actual = seccion.bpm || "Global";
+    let siguienteIdx = (opciones.indexOf(actual) + 1) % opciones.length;
+    let siguiente = opciones[siguienteIdx];
+
+    seccion.bpm = siguiente === "Global" ? null : siguiente;
+    
+    mostrarNotificacion(`BPM de la sección actualizado a: ${siguiente}`, 'info');
+    actualizarVistaPrevia();
 }
 
 function eliminarSeccion(id) {
@@ -182,6 +221,15 @@ function actualizarVistaPrevia() {
                         <button class="btn-duplicar-instrumento no-print" onclick="transponerSeccion(${seccion.id}, -1)" title="Bajar un semitono">-</button>
                         <button class="btn-duplicar-instrumento no-print text-primary" onclick="sugerirTonalidadSeccion(${seccion.id})" title="Detectar tonalidad de esta sección">
                             <i class="bi bi-magic"></i>
+                        </button>
+                        <button class="btn-duplicar-instrumento no-print text-info" onclick="cambiarTiempoSeccion(${seccion.id})" title="Cambiar compás de esta sección">
+                            <span style="font-size: 10px; font-weight: bold;">${seccion.tiempo || 'G'}</span>
+                        </button>
+                        <button class="btn-duplicar-instrumento no-print text-danger" onclick="cambiarBpmSeccion(${seccion.id})" title="Cambiar velocidad (BPM) de esta sección">
+                            <span style="font-size: 10px; font-weight: bold;">${seccion.bpm || 'B'}</span>
+                        </button>
+                        <button class="btn-duplicar-instrumento no-print text-warning" onclick="tocarSeccionEnPiano(${seccion.id})" title="Tocar esta sección en el piano">
+                            <i class="bi bi-play-fill"></i>
                         </button>
                     </div>
                     <button class="btn btn-danger btn-sm" onclick="eliminarSeccion(${seccion.id})">
@@ -1432,4 +1480,474 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.barra-flotante button').forEach(btn => {
         btn.addEventListener('mousedown', e => e.preventDefault());
     });
+});
+
+// ==================== PIANO VIRTUAL ====================
+let audioContext = null;
+let acordePendiente = null; // null = reproducción simple, '' = acorde mayor, 'm' = menor, etc.
+let metronomoTimer = null;
+let metronomoActivo = false;
+let bpmActual = 120;
+let beatActual = 0;
+let beatsPorCompasMetronomo = 4;
+
+function initAudio() {
+// ... (omitiendo para brevedad, pero se mantiene el cuerpo real)
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+            latencyHint: 'interactive'
+        });
+    }
+    if (audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+}
+
+// ==================== METRÓNOMO ====================
+function actualizarBPM(valor) {
+    bpmActual = parseInt(valor);
+    document.getElementById('bpmLabel').textContent = `${bpmActual} BPM`;
+    if (metronomoActivo) {
+        detenerMetronomo();
+        iniciarMetronomo();
+    }
+}
+
+function toggleMetronomo() {
+    initAudio();
+    const btn = document.getElementById('btnMetronomo');
+    if (metronomoActivo) {
+        detenerMetronomo();
+        if (btn) {
+            btn.classList.remove('btn-danger', 'active');
+            btn.classList.add('btn-outline-primary');
+            btn.innerHTML = '<i class="bi bi-metronome"></i>';
+        }
+    } else {
+        iniciarMetronomo();
+        if (btn) {
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-danger', 'active');
+            btn.innerHTML = '<i class="bi bi-stop-circle"></i>';
+        }
+    }
+}
+
+function iniciarMetronomo() {
+    metronomoActivo = true;
+    const tiempoPorBeat = 60000 / bpmActual;
+    const compasGlobal = document.getElementById('tiempo').value.split('/');
+    beatsPorCompasMetronomo = parseInt(compasGlobal[0]) || 4;
+    
+    beatActual = 0;
+    
+    metronomoTimer = setInterval(() => {
+        const light = document.getElementById('metronomeLight');
+        const esAcento = beatActual % beatsPorCompasMetronomo === 0;
+        
+        // Sonido de metrónomo
+        tocarClickMetronomo(esAcento);
+        
+        // Visual
+        light.classList.add('active');
+        if (esAcento) light.classList.add('strong');
+        
+        setTimeout(() => {
+            if (light) light.classList.remove('active', 'strong');
+        }, 100);
+        
+        beatActual++;
+    }, tiempoPorBeat);
+}
+
+function detenerMetronomo() {
+    metronomoActivo = false;
+    clearInterval(metronomoTimer);
+    metronomoTimer = null;
+}
+
+function tocarClickMetronomo(acento) {
+    if (!audioContext) return;
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(acento ? 1000 : 800, audioContext.currentTime);
+    
+    gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.05);
+    
+    osc.start(audioContext.currentTime);
+    osc.stop(audioContext.currentTime + 0.05);
+}
+
+function togglePiano() {
+    const pianoContainer = document.getElementById('pianoContainer');
+    const btnToggle = document.getElementById('btnTogglePiano');
+    
+    initAudio(); // Inicializar audio al hacer clic
+
+    if (pianoContainer.style.display === 'none') {
+        pianoContainer.style.display = 'block';
+        if (btnToggle) btnToggle.classList.add('active');
+        
+        // Sincronizar eventos del piano una sola vez de forma robusta
+        prepararEventosPiano();
+    } else {
+        pianoContainer.style.display = 'none';
+        if (btnToggle) btnToggle.classList.remove('active');
+    }
+}
+
+function prepararEventosPiano() {
+    const piano = document.getElementById('piano');
+    if (!piano || piano.dataset.eventosListos) return;
+
+    // Delegación de eventos para mayor eficiencia y evitar clones
+    ['pointerdown'].forEach(evtType => {
+        piano.addEventListener(evtType, (e) => {
+            const key = e.target.closest('.piano-key');
+            if (!key) return;
+            
+            e.preventDefault();
+            initAudio(); // Asegurar audio activo en cada toque
+
+            const nota = key.dataset.note;
+            const octava = parseInt(key.dataset.octave) || 4;
+
+            // 1. Tocar sonido inmediatamente
+            tocarNota(nota, octava);
+            
+            // 2. Efecto visual de pulsación
+            key.classList.add('active');
+            setTimeout(() => key.classList.remove('active'), 150);
+
+            // 3. Si estamos en modo inserción de acorde
+            if (acordePendiente !== null) {
+                const notaCompleta = nota + (acordePendiente || '');
+                insertarEnSeccion(` ${notaCompleta} `);
+                
+                // Mostrar en el display
+                const pianoDisplay = document.getElementById('pianoDisplay');
+                if (pianoDisplay) pianoDisplay.textContent = notaCompleta;
+            } else {
+                // Modo reproducción simple: mostrar nota en display
+                const pianoDisplay = document.getElementById('pianoDisplay');
+                if (pianoDisplay) {
+                    pianoDisplay.textContent = nota + octava;
+                    setTimeout(() => { 
+                        if (pianoDisplay.textContent === nota + octava) pianoDisplay.textContent = ''; 
+                    }, 1000);
+                }
+            }
+        });
+    });
+
+    piano.dataset.eventosListos = 'true';
+}
+
+// Frecuencias base de las notas (Octava 0)
+const notasFrecuenciasBase = {
+    'C': 16.35, 'C#': 17.32, 'D': 18.35, 'D#': 19.45, 'E': 20.60, 'F': 21.83, 'F#': 23.12, 'G': 24.50, 'G#': 25.96, 'A': 27.50, 'A#': 29.14, 'B': 30.87
+};
+
+function tocarNota(nota, octava = 4) {
+    initAudio();
+    
+    const frecuenciaBase = notasFrecuenciasBase[nota];
+    if (!frecuenciaBase) return;
+    
+    const frecuencia = frecuenciaBase * Math.pow(2, octava);
+    
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(frecuencia, audioContext.currentTime);
+    
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.01); // Ataque rápido
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 1.2); // Decaimiento
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 1.2);
+}
+
+function insertarAcordePiano(modificador = '') {
+    initAudio();
+    acordePendiente = modificador;
+    mostrarNotificacion(`Modo: Insertar acorde ${modificador || 'mayor'} - Toca una tecla`, 'info');
+}
+
+function resetAcordePiano() {
+    acordePendiente = null;
+    mostrarNotificacion('Modo: Solo tocar (reproducción simple)', 'info');
+}
+
+// ==================== REPRODUCCIÓN EN PIANO ====================
+const INTERVALOS_ACORDES = {
+    '': [0, 4, 7],
+    'm': [0, 3, 7],
+    '7': [0, 4, 7, 10],
+    'maj7': [0, 4, 7, 11],
+    'm7': [0, 3, 7, 10],
+    'dim': [0, 3, 6],
+    'aug': [0, 4, 8],
+    'sus2': [0, 2, 7],
+    'sus4': [0, 5, 7],
+    'maj9': [0, 4, 7, 11, 14],
+    'm9': [0, 3, 7, 10, 14],
+    '9': [0, 4, 7, 10, 14],
+    '11': [0, 4, 7, 10, 14, 17],
+    '13': [0, 4, 7, 10, 14, 17, 21]
+};
+
+const MAPA_NOTAS_INDICE = {
+    'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
+};
+
+const INDICE_NOTAS_MAPA = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
+    const seccion = secciones.find(s => s.id === seccionId);
+    if (!seccion || !seccion.acordes.trim()) {
+        if (inicioRetraso === 0) mostrarNotificacion('La sección está vacía', 'warning');
+        return 0;
+    }
+
+    const pianoContainer = document.getElementById('pianoContainer');
+    if (pianoContainer.style.display === 'none') togglePiano();
+    if (inicioRetraso === 0) pianoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    const bpmEfectivo = seccion.bpm || bpmActual;
+    const tiempoPorBeat = 60000 / bpmEfectivo;
+    const compasEfectivo = (seccion.tiempo || document.getElementById('tiempo').value).split('/');
+    const beatsPorCompasEfectivo = parseInt(compasEfectivo[0]) || 4;
+
+    setTimeout(() => {
+        if (metronomoActivo) {
+            beatsPorCompasMetronomo = beatsPorCompasEfectivo;
+            beatActual = 0;
+            if (seccion.bpm) {
+                detenerMetronomo();
+                const originalBpm = bpmActual;
+                bpmActual = seccion.bpm;
+                iniciarMetronomo();
+                bpmActual = originalBpm;
+            }
+        } else if (inicioRetraso === 0) {
+            initAudio();
+        }
+    }, inicioRetraso);
+
+    const lineas = seccion.acordes.split('\n');
+    let tiempoRelativo = 0;
+    const pianoDisplay = document.getElementById('pianoDisplay');
+
+    lineas.forEach(linea => {
+        if (!linea.trim()) return;
+
+        const esAcordeModo = linea.includes('|');
+        
+        if (esAcordeModo) {
+            // Dividir por compases | C G | Am |
+            const compases = linea.split('|').map(c => c.trim()).filter(c => c !== '');
+            
+            compases.forEach(compas => {
+                const tokens = compas.split(/\s+/).filter(t => t.trim() !== '');
+                const numTokens = tokens.length;
+                if (numTokens === 0) return;
+
+                // Lógica de repetición rítmica: Repartir beatsPorCompasEfectivo entre los tokens
+                const baseReps = Math.floor(beatsPorCompasEfectivo / numTokens);
+                const remainder = beatsPorCompasEfectivo % numTokens;
+
+                tokens.forEach((token, idx) => {
+                    const reps = idx < remainder ? baseReps + 1 : baseReps;
+                    
+                    for (let i = 0; i < reps; i++) {
+                        const match = token.match(/^([CDEFGAB][#b]?)(m|dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?(maj7|m7|7|9|11|13)?(?:\/([CDEFGAB][#b]?))?$/i);
+                        
+                        if (match) {
+                            const notaBase = match[1].toUpperCase();
+                            const sufijo = (match[2] || '') + (match[3] || '');
+                            const bajo = match[4] ? match[4].toUpperCase() : null;
+
+                            setTimeout(() => {
+                                limpiarMarcasPiano(false);
+                                if (pianoDisplay) pianoDisplay.textContent = token;
+                                tocarAcordeCompleto(notaBase, sufijo, bajo);
+                            }, inicioRetraso + tiempoRelativo);
+                        }
+                        tiempoRelativo += tiempoPorBeat;
+                    }
+                });
+            });
+        } else {
+            // Modo notas sueltas (1 beat cada una)
+            const tokens = linea.split(/\s+/).filter(t => t.trim() !== '');
+            tokens.forEach(token => {
+                const match = token.match(/^([CDEFGAB][#b]?)(m|dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?(maj7|m7|7|9|11|13)?(?:\/([CDEFGAB][#b]?))?$/i);
+                if (match) {
+                    const notaBase = match[1].toUpperCase();
+                    const sufijo = (match[2] || '') + (match[3] || '');
+                    const bajo = match[4] ? match[4].toUpperCase() : null;
+
+                    setTimeout(() => {
+                        limpiarMarcasPiano(false);
+                        if (pianoDisplay) pianoDisplay.textContent = token;
+                        if (sufijo || bajo) {
+                            tocarAcordeCompleto(notaBase, sufijo, bajo);
+                        } else {
+                            tocarNota(notaBase, 4);
+                            resaltarTeclaPiano(notaBase, 4, tiempoPorBeat / 1.5);
+                        }
+                    }, inicioRetraso + tiempoRelativo);
+                    tiempoRelativo += tiempoPorBeat;
+                }
+            });
+        }
+    });
+
+    return tiempoRelativo;
+}
+
+function tocarCancionCompletaEnPiano() {
+    if (secciones.length === 0) {
+        mostrarNotificacion('Agrega secciones musicales primero', 'warning');
+        return;
+    }
+
+    mostrarNotificacion('Iniciando reproducción de la canción completa...', 'success');
+    
+    // Scroll al piano al empezar
+    const pianoContainer = document.getElementById('pianoContainer');
+    if (pianoContainer.style.display === 'none') togglePiano();
+    pianoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    let tiempoAcumulado = 0;
+    const pausaEntreSecciones = 500; // Pequeña pausa de medio segundo entre secciones
+
+    secciones.forEach((seccion) => {
+        const duracionSeccion = tocarSeccionEnPiano(seccion.id, tiempoAcumulado);
+        if (duracionSeccion > 0) {
+            tiempoAcumulado += duracionSeccion + pausaEntreSecciones;
+        }
+    });
+
+    // Limpiar el display al terminar toda la canción
+    setTimeout(() => {
+        const pianoDisplay = document.getElementById('pianoDisplay');
+        if (pianoDisplay) pianoDisplay.textContent = 'FIN';
+        setTimeout(() => { if (pianoDisplay) pianoDisplay.textContent = ''; }, 2000);
+        detenerMetronomo();
+        const btn = document.getElementById('btnMetronomo');
+        if (btn) {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-primary');
+        }
+    }, tiempoAcumulado);
+}
+
+function tocarAcordeCompleto(notaBase, sufijo, bajo = null) {
+    const baseIdx = MAPA_NOTAS_INDICE[notaBase];
+    if (baseIdx === undefined) return;
+
+    // Buscar el mejor ajuste de intervalos
+    let intervalos = INTERVALOS_ACORDES['']; // Default mayor
+    for (const [key, value] of Object.entries(INTERVALOS_ACORDES)) {
+        if (key && sufijo.toLowerCase().includes(key)) {
+            intervalos = value;
+            break;
+        }
+    }
+
+    // Duración de la iluminación (sincronizada con el beat)
+    const duracionLuz = 60000 / (bpmActual * 1.5); // Un poco menos que un beat para que parpadee
+
+    intervalos.forEach(intervalo => {
+        const totalSemitonos = baseIdx + intervalo;
+        const octavaOffset = Math.floor(totalSemitonos / 12);
+        const notaFinalIdx = totalSemitonos % 12;
+        const notaFinal = INDICE_NOTAS_MAPA[notaFinalIdx];
+        const octavaFinal = 4 + octavaOffset;
+
+        tocarNota(notaFinal, octavaFinal);
+        resaltarTeclaPiano(notaFinal, octavaFinal, duracionLuz);
+    });
+
+    // Tocar el bajo si existe
+    if (bajo) {
+        const bajoIdx = MAPA_NOTAS_INDICE[bajo];
+        if (bajoIdx !== undefined) {
+            // El bajo suele tocarse una octava por debajo (Octava 3)
+            tocarNota(bajo, 3);
+            resaltarTeclaPiano(bajo, 3, duracionLuz);
+        }
+    }
+}
+
+function resaltarTeclaPiano(nota, octava, duracionMs) {
+    const selector = `.piano-key[data-note="${nota}"][data-octave="${octava}"]`;
+    const tecla = document.querySelector(selector);
+    
+    if (tecla) {
+        tecla.classList.add('marked-persistent');
+        // El temporizador de 20s se mantiene como fallback o para clics manuales,
+        // pero tocarSeccionEnPiano limpiará antes de la siguiente nota.
+        const timerId = setTimeout(() => {
+            tecla.classList.remove('marked-persistent');
+        }, duracionMs);
+        
+        if (!window._pianoTimers) window._pianoTimers = [];
+        window._pianoTimers.push(timerId);
+    }
+}
+
+function limpiarMarcasPiano(mostrarNotif = true) {
+    document.querySelectorAll('.piano-key').forEach(tecla => {
+        tecla.classList.remove('marked-persistent');
+    });
+    
+    if (window._pianoTimers) {
+        window._pianoTimers.forEach(timerId => clearTimeout(timerId));
+        window._pianoTimers = [];
+    }
+    
+    if (mostrarNotif) {
+        mostrarNotificacion('Piano limpiado', 'info');
+        const pianoDisplay = document.getElementById('pianoDisplay');
+        if (pianoDisplay) pianoDisplay.textContent = '';
+    }
+}
+
+// Modificar la inicialización del piano
+document.addEventListener('DOMContentLoaded', () => {
+    // ... código existente ...
+    
+    // Inicializar piano si existe
+    const pianoContainer = document.getElementById('pianoContainer');
+    if (pianoContainer) {
+        pianoContainer.style.display = 'none';
+        
+        // Configurar teclas del piano para reproducción simple (sin modificar el modo)
+        document.querySelectorAll('.piano-key').forEach(key => {
+            key.addEventListener('click', (e) => {
+                // Si no estamos en modo selección de acorde, solo tocar y no insertar
+                if (!acordePendiente && acordePendiente !== '') {
+                    const nota = key.dataset.note;
+                    const octava = parseInt(key.dataset.octave) || 4;
+                    tocarNota(nota, octava);
+                    key.classList.add('active');
+                    setTimeout(() => key.classList.remove('active'), 150);
+                }
+            });
+        });
+    }
 });
