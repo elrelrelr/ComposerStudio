@@ -45,7 +45,7 @@
                         <div class="col-12">
                             <label for="importarMarkdown" class="btn btn-outline-info w-100">
                                 <i class="bi bi-file-arrow-up me-2"></i>
-                                Importar desde archivo .md
+                                Importar .md
                             </label>
                             <input type="file" class="d-none" id="importarMarkdown" accept=".md,.markdown,text/markdown">
                         </div>
@@ -219,25 +219,31 @@
 
             <!-- Botones de acción -->
             <div class="row g-3 mb-5 no-print">
-                <div class="col-md-3 col-6">
+                <div class="col-md-4 col-6">
+                    <button class="btn btn-dark btn-lg w-100" onclick="deshacer()" title="Deshacer (Ctrl+Z)">
+                        <i class="bi bi-arrow-counterclockwise me-2"></i>
+                        Deshacer
+                    </button>
+                </div>
+                <div class="col-md-4 col-6">
                     <button class="btn btn-success btn-lg w-100" onclick="exportarMarkdown()">
                         <i class="bi bi-markdown me-2"></i>
                         MD
                     </button>
                 </div>
-                <div class="col-md-3 col-6">
+                <div class="col-md-4 col-6">
                     <button class="btn btn-primary btn-lg w-100" onclick="exportarImagen()">
                         <i class="bi bi-image me-2"></i>
                         Imagen
                     </button>
                 </div>
-                <div class="col-md-3 col-6">
+                <div class="col-md-4 col-6">
                     <button class="btn btn-danger btn-lg w-100" onclick="exportarPDF()">
                         <i class="bi bi-file-pdf me-2"></i>
                         PDF
                     </button>
                 </div>
-                <div class="col-md-3 col-6">
+                <div class="col-md-4 col-6">
                     <button class="btn btn-secondary btn-lg w-100" onclick="window.print()">
                         <i class="bi bi-printer me-2"></i>
                         Imprimir
@@ -253,13 +259,6 @@
             Piano Virtual
         </button>
     </div>
-    <div class="col-md-3 col-6">
-        <button class="btn btn-success btn-lg w-100" onclick="exportarMarkdown()">
-            <i class="bi bi-markdown me-2"></i>
-            MD
-        </button>
-    </div>
-    <!-- ... resto de botones ... -->
 </div>
 
 <!-- Piano Virtual (oculto por defecto) -->
@@ -407,6 +406,8 @@
                         <button class="btn btn-outline-info" onclick="insertarEnSeccion(' ← ')" title="Abajo">←</button>
                         <button class="btn btn-outline-info" onclick="insertarEnSeccion(' | ')" title="Barra de compás">|</button>
                         <button class="btn btn-outline-info" onclick="insertarEnSeccion(' || ')" title="Doble barra de compás">||</button>
+                        <button class="btn btn-outline-dark fw-bold" onclick="insertarEnSeccion('-- ')" title="Silencio">--</button>
+                        <button class="btn btn-outline-dark fw-bold" onclick="insertarEnSeccion('.')" title="Duración (toque)">.</button>
                         <button class="btn btn-outline-info" onclick="insertarEnSeccion('-')" title="Separación">-</button>
                         <button class="btn btn-outline-info" onclick="insertarEnSeccion('/')" title="Bajo">/</button>
                         <button class="btn btn-outline-info" onclick="insertarEnSeccion('SUS ')" title="Sus">SUS</button>

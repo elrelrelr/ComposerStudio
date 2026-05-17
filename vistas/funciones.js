@@ -1,5 +1,7 @@
 // ==================== ESTADO GLOBAL ====================
 let secciones = [];
+let historialUndo = [];
+const MAX_UNDO = 50;
 let paintMode = false;
 let currentPaintColor = '#000000';
 let currentBrushSize = 3;
@@ -40,6 +42,46 @@ const escalas = {
     "Bbm": ["Bbm", "Cm", "Db", "Ebm", "Fm", "Gb", "Ab"]
 };
 
+// ==================== SISTEMA DESHACER (UNDO) ====================
+function guardarHistorial() {
+    // Guardar una copia profunda del estado actual de las secciones
+    const estado = JSON.stringify(secciones);
+    
+    // Solo guardar si es diferente al último estado
+    if (historialUndo.length === 0 || historialUndo[historialUndo.length - 1] !== estado) {
+        historialUndo.push(estado);
+        if (historialUndo.length > MAX_UNDO) {
+            historialUndo.shift(); // Mantener límite de memoria
+        }
+    }
+}
+
+function deshacer() {
+    if (historialUndo.length > 1) {
+        // Eliminar el estado actual (que es el último guardado)
+        historialUndo.pop();
+        // Obtener el estado anterior
+        const estadoAnterior = JSON.parse(historialUndo[historialUndo.length - 1]);
+        
+        secciones = estadoAnterior;
+        actualizarVistaPrevia();
+        mostrarNotificacion('Cambio revertido', 'info');
+    } else if (historialUndo.length === 1) {
+        // Caso especial: volver al estado inicial vacío o primer estado
+        mostrarNotificacion('No hay más cambios para deshacer', 'warning');
+    } else {
+        mostrarNotificacion('No hay historial de cambios', 'warning');
+    }
+}
+
+// Atajos de teclado
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        deshacer();
+    }
+});
+
 // ==================== AUTO FORMATO DE ACORDES ====================
 function formatearTextoAcordes(texto) {
     const acordePattern = '[CDEFGAB][#b]?m?(?:dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?';
@@ -51,7 +93,49 @@ function formatearTextoAcordes(texto) {
     const rule2Regex = new RegExp(`(^|\\s|\\|\\s*)(${acordePattern}(?:\\/${acordePattern})?)\\s+(${acordePattern}(?:\\/${acordePattern})?)(?=\\s|$|\\|)`, 'gi');
 
     let lineas = texto.split('\n');
-    let nuevasLineas = lineas.map(linea => {
+    
+    // Regla: Si hay líneas consecutivas que son solo compases, juntarlas
+    // Al juntar '| Am |' y '| G |', queremos '| Am | G |', no '| Am | | G |'
+    let lineasProcesadas = [];
+    for (let i = 0; i < lineas.length; i++) {
+        let lineaActual = lineas[i].trim();
+        let esSoloCompas = /^\|.*\|$/.test(lineaActual);
+        
+        if (esSoloCompas && lineasProcesadas.length > 0) {
+            let ultimaPos = lineasProcesadas.length - 1;
+            let ultimaLinea = lineasProcesadas[ultimaPos].trim();
+            let ultimaEsSoloCompas = /^\|.*\|$/.test(ultimaLinea);
+            
+            if (ultimaEsSoloCompas) {
+                // Combinamos eliminando la barra de apertura de la nueva línea si la anterior ya tiene barra de cierre
+                // '| Am |' + '| G |' -> '| Am |' + ' G |'
+                let contenidoNuevo = lineaActual.substring(1); 
+                lineasProcesadas[ultimaPos] = ultimaLinea + contenidoNuevo;
+                continue;
+            }
+        }
+        lineasProcesadas.push(lineas[i]);
+    }
+
+    let nuevasLineas = lineasProcesadas.map(linea => {
+        // Regla: 1 o 2 espacios entre barras -> compás doble (||)
+        // Pero primero colapsamos espacios múltiples internos para que la regla de unión de líneas sea limpia
+        linea = linea.replace(/\|\s{1,2}\|/g, '||');
+        
+        // Regla: 3 o más espacios entre barras -> normalizar a exactamente 3 espacios (|   |)
+        linea = linea.replace(/\|\s{3,}\|/g, '|   |');
+
+        // Regla: - - -> -- (silencio)
+        linea = linea.replace(/-\s+-/g, '--');
+
+        // Normalizar puntos dentro de compases (quitar espacios antes de los puntos)
+        // Solo si están dentro de | ... | o || ... ||
+        linea = linea.replace(/(\|\|?)(.*?)(\|\|?)/g, (match, p1, p2, p3) => {
+            // Quitar espacios antes de puntos en el contenido del compás
+            const contenidoProcesado = p2.replace(/(\S)\s+(\.+)/g, '$1$2');
+            return p1 + contenidoProcesado + p3;
+        });
+
         // Normalizar espacios alrededor de barras de compás y colapsar espacios múltiples
         linea = linea.replace(/\s{2,}/g, ' '); // Colapsar múltiples espacios a uno solo
         linea = linea.replace(/\|\s+/g, '| '); // Máximo un espacio después de |
@@ -134,6 +218,7 @@ function agregarSeccion(tipo) {
     guardarTodasLasSecciones();
     actualizarVistaPrevia();
     mostrarBarraFlotante();
+    guardarHistorial();
 }
 
 function cambiarTiempoSeccion(id) {
@@ -146,12 +231,13 @@ function cambiarTiempoSeccion(id) {
     let siguiente = opciones[siguienteIdx];
 
     seccion.tiempo = siguiente === "Global" ? null : siguiente;
-    
+
     mostrarNotificacion(`Compás de la sección actualizado a: ${siguiente}`, 'info');
     actualizarVistaPrevia();
-}
+    guardarHistorial();
+    }
 
-function cambiarBpmSeccion(id) {
+    function cambiarBpmSeccion(id) {
     const seccion = secciones.find(s => s.id === id);
     if (!seccion) return;
 
@@ -162,16 +248,17 @@ function cambiarBpmSeccion(id) {
     let siguiente = opciones[siguienteIdx];
 
     seccion.bpm = siguiente === "Global" ? null : siguiente;
-    
+
     mostrarNotificacion(`BPM de la sección actualizado a: ${siguiente}`, 'info');
     actualizarVistaPrevia();
-}
-
+    guardarHistorial();
+    }
 function eliminarSeccion(id) {
     guardarTodasLasSecciones();
     secciones = secciones.filter(s => s.id !== id);
     paintData.delete(id);
     actualizarVistaPrevia();
+    guardarHistorial(); // Guardar el nuevo estado después de eliminar
 }
 
 function actualizarVistaPrevia() {
@@ -462,6 +549,7 @@ function insertarEnSeccion(texto) {
                 }
                 
                 actualizarVistaPrevia();
+                guardarHistorial();
             }
         }
 }
@@ -854,6 +942,7 @@ function transponerSeccion(seccionId, pasos) {
     
     seccion.acordes = nuevasLineas.join('\n');
     actualizarVistaPrevia();
+    guardarHistorial();
 }
 
 function transponerAcorde(acorde, pasos) {
@@ -990,6 +1079,7 @@ function handleTituloInput(e) {
             seccion.tipo = isNaN(numero) ? texto : partes.slice(0, -1).join(' ');
         }
     }
+    guardarHistorial();
 }
 
 function handleAcordeBlur(e) {
@@ -1132,7 +1222,19 @@ function exportarMarkdown() {
     if (letra.trim() && incluirLetra) contenido += `### Letra\n\n${letra}\n\n`;
     
     secciones.forEach((seccion, index) => {
-        contenido += `### ${seccion.tipo} ${index + 1}\n\n`;
+        contenido += `### ${seccion.tipo} ${index + 1}\n`;
+        
+        // Agregar metadatos de sección si existen
+        let meta = [];
+        if (seccion.tiempo) meta.push(`**Compás:** ${seccion.tiempo}`);
+        if (seccion.bpm) meta.push(`**BPM:** ${seccion.bpm}`);
+        if (seccion.tonalidadSugerida) meta.push(`**Tonalidad:** ${seccion.tonalidadSugerida}`);
+        
+        if (meta.length > 0) {
+            contenido += meta.join(' | ') + '\n';
+        }
+        contenido += '\n';
+
         if (seccion.acordes.trim()) {
             contenido += "```text\n" + seccion.acordes.trim() + "\n```\n\n";
         }
@@ -1235,6 +1337,7 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
         let seccionesImportadas = [];
         let lineaActual = '', tipoSeccion = '';
         let enLetra = false, enSeccion = false;
+        let seccionMetaActual = { tiempo: null, bpm: null, tonalidad: null };
         
         for (const line of lines) {
             if (line.startsWith('# ') && !nombre) {
@@ -1258,13 +1361,26 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
                         id: Date.now() + seccionesImportadas.length,
                         tipo: tipoSeccion,
                         acordes: lineaActual.trim(),
-                        paintData: null
+                        paintData: null,
+                        tiempo: seccionMetaActual.tiempo,
+                        bpm: seccionMetaActual.bpm,
+                        tonalidadSugerida: seccionMetaActual.tonalidad
                     });
                 }
                 tipoSeccion = line.replace('### ', '').trim().replace(/\s+\d+$/, '');
                 lineaActual = '';
+                seccionMetaActual = { tiempo: null, bpm: null, tonalidad: null };
                 enSeccion = true;
                 enLetra = false;
+            } else if (enSeccion && line.includes('**Compás:**') || line.includes('**BPM:**') || line.includes('**Tonalidad:**')) {
+                // Leer metadatos de la sección
+                const matchCompas = line.match(/\*\*Compás:\*\*\s*([^\s|]+)/);
+                const matchBpm = line.match(/\*\*BPM:\*\*\s*(\d+)/);
+                const matchTon = line.match(/\*\*Tonalidad:\*\*\s*([^\s|]+)/);
+                
+                if (matchCompas) seccionMetaActual.tiempo = matchCompas[1];
+                if (matchBpm) seccionMetaActual.bpm = parseInt(matchBpm[1]);
+                if (matchTon) seccionMetaActual.tonalidad = matchTon[1];
             } else if (line.startsWith('```text')) {
                 lineaActual = '';
             } else if (line.startsWith('```') && line.trim() !== '```text') {
@@ -1281,7 +1397,10 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
                 id: Date.now() + seccionesImportadas.length,
                 tipo: tipoSeccion,
                 acordes: lineaActual.trim(),
-                paintData: null
+                paintData: null,
+                tiempo: seccionMetaActual.tiempo,
+                bpm: seccionMetaActual.bpm,
+                tonalidadSugerida: seccionMetaActual.tonalidad
             });
         }
         
@@ -1480,6 +1599,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.barra-flotante button').forEach(btn => {
         btn.addEventListener('mousedown', e => e.preventDefault());
     });
+
+    guardarHistorial();
 });
 
 // ==================== PIANO VIRTUAL ====================
@@ -1714,6 +1835,24 @@ const MAPA_NOTAS_INDICE = {
 
 const INDICE_NOTAS_MAPA = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
+function expandirRepeticiones(linea) {
+    // Reemplaza bloques || ... || [xN] por el contenido repetido N veces
+    // Soporta || A | E || (repite 2 veces por defecto)
+    // Soporta || A | E || x3 (repite 3 veces)
+    return linea.replace(/\|\|(.*?)\|\|(?:\s*x\s*(\d+))?/g, (match, contenido, multiplicador) => {
+        const veces = multiplicador ? parseInt(multiplicador) : 2;
+        const contenidoLimpio = contenido.trim();
+        if (!contenidoLimpio) return "";
+        
+        let expandido = [];
+        for (let i = 0; i < veces; i++) {
+            expandido.push(contenidoLimpio);
+        }
+        // Unimos con | para que el split posterior funcione bien
+        return " | " + expandido.join(" | ") + " | ";
+    });
+}
+
 function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
     const seccion = secciones.find(s => s.id === seccionId);
     if (!seccion || !seccion.acordes.trim()) {
@@ -1756,35 +1895,68 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
         const esAcordeModo = linea.includes('|');
         
         if (esAcordeModo) {
+            // Expandir repeticiones || ... || [xN]
+            const lineaExpandida = expandirRepeticiones(linea);
+
             // Dividir por compases | C G | Am |
-            const compases = linea.split('|').map(c => c.trim()).filter(c => c !== '');
+            const compases = lineaExpandida.split('|').map(c => c.trim()).filter(c => c !== '');
             
+            let ultimoCompasReal = null;
+
             compases.forEach(compas => {
-                const tokens = compas.split(/\s+/).filter(t => t.trim() !== '');
-                const numTokens = tokens.length;
-                if (numTokens === 0) return;
+                // Lógica de repetición de compás (%)
+                if (compas === '%' && ultimoCompasReal) {
+                    compas = ultimoCompasReal;
+                } else if (compas !== '%') {
+                    ultimoCompasReal = compas;
+                }
 
-                // Lógica de repetición rítmica: Repartir beatsPorCompasEfectivo entre los tokens
-                const baseReps = Math.floor(beatsPorCompasEfectivo / numTokens);
-                const remainder = beatsPorCompasEfectivo % numTokens;
+                // Tokens que no son guiones decorativos individuales, pero permiten -- (silencio)
+                const tokensRaw = compas.split(/\s+/).filter(t => t.trim() !== '' && t !== '-');
+                if (tokensRaw.length === 0) return;
 
-                tokens.forEach((token, idx) => {
-                    const reps = idx < remainder ? baseReps + 1 : baseReps;
+                // Mapear tokens a objetos con peso (1 + cantidad de puntos)
+                const tokensProcesados = tokensRaw.map(t => {
+                    const matchDots = t.match(/^([^\.]+)(\.*)$/);
+                    const limpio = matchDots ? matchDots[1] : t;
+                    const puntos = matchDots ? matchDots[2].length : 0;
+                    return { texto: limpio, peso: 1 + puntos, original: t };
+                });
+
+                const pesoTotalCompas = tokensProcesados.reduce((sum, t) => sum + t.peso, 0);
+                // Determinamos cuántos beats totales le corresponden a cada token (pueden ser decimales si el peso no es exacto)
+                // Pero intentaremos redondear a enteros para que el piano "marque" pulsos claros.
+                
+                tokensProcesados.forEach((tokenObj) => {
+                    // Calculamos cuántos beats (pulsos) dura este token
+                    const numBeatsToken = (tokenObj.peso / pesoTotalCompas) * beatsPorCompasEfectivo;
                     
-                    for (let i = 0; i < reps; i++) {
-                        const match = token.match(/^([CDEFGAB][#b]?)(m|dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?(maj7|m7|7|9|11|13)?(?:\/([CDEFGAB][#b]?))?$/i);
-                        
-                        if (match) {
-                            const notaBase = match[1].toUpperCase();
-                            const sufijo = (match[2] || '') + (match[3] || '');
-                            const bajo = match[4] ? match[4].toUpperCase() : null;
+                    for (let b = 0; b < numBeatsToken; b++) {
+                        const tiempoDeEsteBeat = inicioRetraso + tiempoRelativo;
 
+                        // Solo tocar si no es un silencio (--)
+                        if (tokenObj.texto !== '--') {
+                            const match = tokenObj.texto.match(/^([CDEFGAB][#b]?)(m|dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?(maj7|m7|7|9|11|13)?(?:\/([CDEFGAB][#b]?))?$/i);
+                            
+                            if (match) {
+                                const notaBase = match[1].toUpperCase();
+                                const sufijo = (match[2] || '') + (match[3] || '');
+                                const bajo = match[4] ? match[4].toUpperCase() : null;
+
+                                setTimeout(() => {
+                                    limpiarMarcasPiano(false);
+                                    if (pianoDisplay) pianoDisplay.textContent = tokenObj.original;
+                                    tocarAcordeCompleto(notaBase, sufijo, bajo);
+                                }, tiempoDeEsteBeat);
+                            }
+                        } else {
+                            // Es un silencio, opcionalmente limpiar el display o mostrar algo
                             setTimeout(() => {
                                 limpiarMarcasPiano(false);
-                                if (pianoDisplay) pianoDisplay.textContent = token;
-                                tocarAcordeCompleto(notaBase, sufijo, bajo);
-                            }, inicioRetraso + tiempoRelativo);
+                                if (pianoDisplay) pianoDisplay.textContent = ' (silencio) ';
+                            }, tiempoDeEsteBeat);
                         }
+                        
                         tiempoRelativo += tiempoPorBeat;
                     }
                 });

@@ -530,6 +530,8 @@ body.export-mode #barraFlotanteContainer {
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     scrollbar-width: thin;
     scrollbar-color: #ffc107 #2c3e50;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
 }
 
 .piano::-webkit-scrollbar {
@@ -552,6 +554,7 @@ body.export-mode #barraFlotanteContainer {
     user-select: none;
     text-align: center;
     font-weight: bold;
+    flex-shrink: 0;
 }
 
 .piano-key.white {
