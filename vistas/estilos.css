@@ -38,33 +38,43 @@ body {
 }
 
 .seccion {
-    margin-bottom: 30px;
-    border-left: 4px solid #3498db;
-    padding-left: 20px;
+    margin-bottom: 12px;
     transition: all 0.3s ease;
     page-break-inside: avoid;
+    border-radius: 12px;
+    padding: 5px 10px;
 }
 
 .seccion:hover {
-    border-left-color: #e74c3c;
-    background-color: #f9f9f9;
+    background-color: #fafbfc;
 }
 
 .seccion-titulo {
-    font-size: 20px;
-    font-weight: bold;
-    color: #2c3e50;
-    margin-bottom: 15px;
-    padding: 8px 12px;
-    background-color: #ecf0f1;
-    border-radius: 8px;
+    font-size: 22px;
+    font-weight: 800;
+    color: #1a252f;
+    margin-bottom: 5px;
+    padding: 2px 0;
+    background-color: transparent;
     cursor: text;
     outline: none;
+    display: inline-block;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.seccion-titulo:hover {
+    border-bottom: 2px dashed #bdc3c7;
 }
 
 .seccion-titulo:focus {
-    background-color: #e8f4fd;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #3498db;
+    color: #3498db;
+    padding: 2px 8px;
+    border-radius: 4px 4px 0 0;
 }
 
 .btn-duplicar-instrumento {
@@ -101,16 +111,17 @@ body {
 .acordes {
     position: relative;
     font-family: 'Consolas', 'Monaco', 'Lucida Console', 'Liberation Mono', 'DejaVu Sans Mono', monospace;
-    font-size: 17px;
-    line-height: 1.6;
-    letter-spacing: 0.3px;
-    background-color: #fffdf7;
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid #f1e9d2;
-    min-height: 100px;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.8;
+    letter-spacing: 1px;
+    background-color: transparent;
+    padding: 5px;
+    border-radius: 8px;
+    border: none;
+    min-height: 35px;
     transition: all 0.3s ease;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+    color: #1a252f;
 }
 
 .acordes.drawing-mode {
@@ -148,27 +159,30 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
     outline: none;
-    min-height: 100px;
+    min-height: 35px;
     line-height: 1.8;
 }
 
 .acordes-content:focus {
-    background-color: #fff8e7;
+    background-color: transparent;
 }
 
 .acorde-linea {
     margin-bottom: 8px;
     padding: 4px 8px;
-    border-radius: 4px;
+    border-radius: 6px;
     outline: none;
     cursor: text;
     white-space: pre-wrap;
     word-break: break-word;
+    border-left: 2px solid transparent;
+    transition: all 0.2s ease;
 }
 
 .acorde-linea:focus {
-    background-color: #fff3cd;
-    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.3);
+    background-color: #f8f9fa;
+    border-left-color: #3498db;
+    color: #2980b9;
 }
 
 /* Estilo especial para Break */
@@ -357,29 +371,7 @@ body.export-mode #barraFlotanteContainer {
     padding: 0 15px 15px 15px;
 }
 
-.barra-flotante-close {
-    position: absolute;
-    top: -10px;
-    right: -10px;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: #dc3545;
-    color: white;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    transition: all 0.2s ease;
-    z-index: 10000;
-}
 
-.barra-flotante-close:hover {
-    transform: scale(1.1);
-    background: #c82333;
-}
 
 /* Controles de paint */
 .paint-controls-barra {
@@ -442,7 +434,6 @@ body.export-mode #barraFlotanteContainer {
     .barra-flotante.show {
         transform: none !important;
     }
-    }
 
     .btn-musical {
         font-size: 11px;
@@ -482,7 +473,8 @@ body.export-mode #barraFlotanteContainer {
 .context-menu-item i {
     font-size: 16px;
 }
-    
+
+@media print {
     .vista-previa {
         padding: 0;
         box-shadow: none;

@@ -15,13 +15,97 @@ const escalas = {
     "D": ["D", "Em", "F#m", "G", "A", "Bm", "C#dim"],
     "A": ["A", "Bm", "C#m", "D", "E", "F#m", "G#dim"],
     "E": ["E", "F#m", "G#m", "A", "B", "C#m", "D#dim"],
+    "B": ["B", "C#m", "D#m", "E", "F#", "G#m", "A#dim"],
+    "F#": ["F#", "G#dim", "A", "B", "C#", "D#m", "E"],
+    "C#": ["C#", "D#dim", "E", "F#", "G#", "A#m", "B"],
+    "Cb": ["Cb", "D", "E", "F", "G", "A", "B"],
     "F": ["F", "Gm", "Am", "Bb", "C", "Dm", "Edim"],
     "Bb": ["Bb", "Cm", "Dm", "Eb", "F", "Gm", "Adim"],
     "Eb": ["Eb", "Fm", "Gm", "Ab", "Bb", "Cm", "Ddim"],
+    "Db": ["Db", "Edim", "F", "Gb", "Ab", "Bbm", "Cm"],
+    "Gb": ["Gb", "Abm", "Bbm", "Cb", "Db", "Ebm", "Fm"],
     "Am": ["Am", "Bdim", "C", "Dm", "Em", "F", "G"],
     "Em": ["Em", "F#dim", "G", "Am", "Bm", "C", "D"],
-    "Bm": ["Bm", "C#dim", "D", "Em", "F#m", "G", "A"]
+    "Bm": ["Bm", "C#dim", "D", "Em", "F#m", "G", "A"],
+    "F#m": ["F#m", "G#dim", "A", "Bm", "C#m", "D", "E"],
+    "C#m": ["C#m", "D#dim", "E", "F#m", "G#m", "A", "B"],
+    "G#m": ["G#m", "A#dim", "B", "C#m", "D#m", "E", "F#"],
+    "D#m": ["D#m", "E#dim", "F#", "G#m", "A#m", "B", "C#"],
+    "A#m": ["A#m", "B#dim", "C#", "D#m", "E#m", "F#", "G#"],
+    "Fm": ["Fm", "Gdim", "Ab", "Bbm", "Cm", "Db", "Edim"],
+    "Cm": ["Cm", "Ddim", "Eb", "Fm", "Gm", "Ab", "Bb"],
+    "Gm": ["Gm", "Adim", "Bb", "Cm", "Dm", "Eb", "F"],
+    "Abm": ["Abm", "Bdim", "Cb", "Dbm", "Ebm", "Fb", "Gb"],
+    "Ebm": ["Ebm", "Fm", "Gb", "Abm", "Bbm", "Cb", "Db"],
+    "Bbm": ["Bbm", "Cm", "Db", "Ebm", "Fm", "Gb", "Ab"]
 };
+
+// ==================== AUTO FORMATO DE ACORDES ====================
+function formatearTextoAcordes(texto) {
+    const acordePattern = '[CDEFGAB][#b]?m?(?:dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?';
+    
+    // Regla 1: Unir bajos (quitar espacios alrededor de /)
+    const rule1Regex = new RegExp(`(${acordePattern})\\s*\\/\\s*(${acordePattern})`, 'gi');
+    
+    // Regla 2: Separar acordes en un compás con guion
+    const rule2Regex = new RegExp(`(^|\\s|\\|\\s*)(${acordePattern}(?:\\/${acordePattern})?)\\s+(${acordePattern}(?:\\/${acordePattern})?)(?=\\s|$|\\|)`, 'gi');
+
+    let lineas = texto.split('\n');
+    let nuevasLineas = lineas.map(linea => {
+        linea = linea.replace(rule1Regex, '$1/$2');
+        
+        let antes = "";
+        while (linea !== antes) {
+            antes = linea;
+            linea = linea.replace(rule2Regex, '$1$2 - $3');
+        }
+        return linea;
+    });
+    
+    return nuevasLineas.join('\n');
+}
+
+function unformatearTextoAcordes(texto) {
+    const acordePattern = '[CDEFGAB][#b]?m?(?:dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?';
+    
+    // Invertir Regla 1: D#/Em -> D# / Em
+    const rule1Regex = new RegExp(`(${acordePattern})\\/(${acordePattern})`, 'gi');
+    
+    // Invertir Regla 2: A - B -> A B
+    const rule2Regex = new RegExp(`(${acordePattern}(?:\\/${acordePattern})?)\\s+-\\s+(${acordePattern}(?:\\/${acordePattern})?)`, 'gi');
+
+    let lineas = texto.split('\n');
+    let nuevasLineas = lineas.map(linea => {
+        let antes = "";
+        while (linea !== antes) {
+            antes = linea;
+            linea = linea.replace(rule2Regex, '$1 $2');
+        }
+        linea = linea.replace(rule1Regex, '$1 / $2');
+        return linea;
+    });
+    
+    return nuevasLineas.join('\n');
+}
+
+function aplicarFormatoGlobal() {
+    const autoFormato = document.getElementById('autoFormato');
+    if (autoFormato) {
+        let hayCambios = false;
+        guardarTodasLasSecciones();
+        secciones.forEach(seccion => {
+            const nuevoTexto = autoFormato.checked 
+                ? formatearTextoAcordes(seccion.acordes) 
+                : unformatearTextoAcordes(seccion.acordes);
+                
+            if (nuevoTexto !== seccion.acordes) {
+                seccion.acordes = nuevoTexto;
+                hayCambios = true;
+            }
+        });
+        if (hayCambios) actualizarVistaPrevia();
+    }
+}
 
 // ==================== FUNCIONES PRINCIPALES ====================
 function agregarSeccion(tipo) {
@@ -30,7 +114,8 @@ function agregarSeccion(tipo) {
         id: id, 
         tipo: tipo, 
         acordes: '', 
-        paintData: null 
+        paintData: null,
+        tonalidadSugerida: null
     });
     
     // Forzar que la nueva sección sea el objetivo del foco
@@ -89,9 +174,15 @@ function actualizarVistaPrevia() {
             
             html += `<div class="seccion" data-seccion-id="${seccion.id}">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <div style="display: flex; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
                         <div class="seccion-titulo" contenteditable="true" data-titulo="true" data-seccion-id="${seccion.id}">${escapeHtml(tipo)}${numeroMostrado}</div>
+                        ${seccion.tonalidadSugerida ? `<span style="background-color: #ffeb3b; border: 1px solid #fbc02d; color: #000; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: bold; margin-left: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); -webkit-print-color-adjust: exact; print-color-adjust: exact;">Tono: ${seccion.tonalidadSugerida}</span>` : ''}
                         <button class="btn-duplicar-instrumento no-print" onclick="duplicarSeccionParaInstrumento(${seccion.id})" title="Agregar otro instrumento para esta sección">=</button>
+                        <button class="btn-duplicar-instrumento no-print" onclick="transponerSeccion(${seccion.id}, 1)" title="Subir un semitono">+</button>
+                        <button class="btn-duplicar-instrumento no-print" onclick="transponerSeccion(${seccion.id}, -1)" title="Bajar un semitono">-</button>
+                        <button class="btn-duplicar-instrumento no-print text-primary" onclick="sugerirTonalidadSeccion(${seccion.id})" title="Detectar tonalidad de esta sección">
+                            <i class="bi bi-magic"></i>
+                        </button>
                     </div>
                     <button class="btn btn-danger btn-sm" onclick="eliminarSeccion(${seccion.id})">
                         <i class="bi bi-trash"></i>
@@ -316,6 +407,12 @@ function insertarEnSeccion(texto) {
                 // Guardar todas las secciones antes de reconstruir
                 guardarTodasLasSecciones();
                 
+                // Aplicar auto-formato condicionalmente
+                const btnFormato = document.getElementById('autoFormato');
+                if (btnFormato && btnFormato.checked) {
+                    seccion.acordes = formatearTextoAcordes(seccion.acordes);
+                }
+                
                 actualizarVistaPrevia();
             }
         }
@@ -532,34 +629,95 @@ function cambiarTamanioPincel(tamanio) {
 }
 
 // ==================== SUGERENCIA DE TONALIDAD ====================
-function sugerirTonalidad() {
-    const acordesTexto = Array.from(document.querySelectorAll('.acorde-linea'))
-        .map(linea => linea.textContent).join(' ');
+function calcularTonalidad(acordesTexto) {
+    const acordesEncontrados = [];
+    const palabras = acordesTexto.split(/[\s|()[\]{},\-]/);
     
-    const acordesEncontrados = acordesTexto.match(/[A-G][#b]?m?(?:\d?)/gi) || [];
-    if (acordesEncontrados.length === 0) {
-        mostrarNotificacion('Escribe algunos acordes primero para detectar la tonalidad', 'warning');
-        return;
+    for (const palabra of palabras) {
+        if (!palabra) continue;
+        const m = palabra.match(/^([CDEFGAB][#b]?m?)(dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?$/i);
+        if (m) {
+            let acordeBase = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+            acordesEncontrados.push(acordeBase);
+        }
     }
-    
-    const acordesLimpios = acordesEncontrados.map(a => a.match(/^[A-G][#b]?m?/i)?.[0]).filter(Boolean);
-    if (acordesLimpios.length === 0) return;
-    
-    const primerAcorde = acordesLimpios[0];
+
+    if (acordesEncontrados.length === 0) {
+        return null;
+    }
+
+    const primerAcorde = acordesEncontrados[0];
     let puntuaciones = {};
     
     for (const [tono, acordesEscala] of Object.entries(escalas)) {
-        puntuaciones[tono] = acordesLimpios.filter(acorde => acordesEscala.includes(acorde)).length;
-        if (tono === primerAcorde) puntuaciones[tono] += 2;
+        puntuaciones[tono] = 0;
+        for (const acorde of acordesEncontrados) {
+            if (acordesEscala.includes(acorde)) {
+                puntuaciones[tono] += 1;
+            }
+        }
+        if (tono === primerAcorde) {
+            puntuaciones[tono] += 3;
+        }
     }
     
-    const tonalidadGanadora = Object.entries(puntuaciones).reduce((a, b) => a[1] > b[1] ? a : b)[0];
+    let mejorTono = null;
+    let maxPuntuacion = -1;
+    for (const [tono, puntos] of Object.entries(puntuaciones)) {
+        if (puntos > maxPuntuacion) {
+            maxPuntuacion = puntos;
+            mejorTono = tono;
+        }
+    }
+    
+    return mejorTono;
+}
+
+function sugerirTonalidad() {
+    const acordesTexto = Array.from(document.querySelectorAll('.acorde-linea'))
+        .map(linea => linea.textContent).join(' ');
+        
+    const tonalidadGanadora = calcularTonalidad(acordesTexto);
+    
+    if (!tonalidadGanadora) {
+        mostrarNotificacion('Escribe algunos acordes válidos primero para detectar la tonalidad', 'warning');
+        return;
+    }
+    
     const selectTonalidad = document.getElementById('tonalidad');
+    let optionExiste = Array.from(selectTonalidad.options).some(opt => opt.value === tonalidadGanadora);
     
-    if (tonalidadGanadora && Array.from(selectTonalidad.options).some(opt => opt.value === tonalidadGanadora)) {
+    if (optionExiste) {
         selectTonalidad.value = tonalidadGanadora;
-        mostrarNotificacion(`Tonalidad sugerida: ${tonalidadGanadora}`, 'success');
+    } else {
+        const newOption = new Option(tonalidadGanadora, tonalidadGanadora);
+        selectTonalidad.add(newOption);
+        selectTonalidad.value = tonalidadGanadora;
     }
+    mostrarNotificacion(`Tonalidad global sugerida: ${tonalidadGanadora}`, 'success');
+}
+
+function sugerirTonalidadSeccion(seccionId) {
+    const seccion = secciones.find(s => s.id === seccionId);
+    if (!seccion || !seccion.acordes) {
+        mostrarNotificacion('Esta sección no tiene acordes', 'warning');
+        return;
+    }
+    
+    if (seccion.tonalidadSugerida) {
+        seccion.tonalidadSugerida = null;
+        actualizarVistaPrevia();
+        return;
+    }
+    
+    const tonalidadGanadora = calcularTonalidad(seccion.acordes);
+    if (!tonalidadGanadora) {
+        mostrarNotificacion('No se detectaron acordes en esta sección', 'warning');
+        return;
+    }
+    
+    seccion.tonalidadSugerida = tonalidadGanadora;
+    actualizarVistaPrevia();
 }
 
 function buscarLetraEnLinea() {
@@ -587,6 +745,118 @@ function duplicarSeccionParaInstrumento(seccionId) {
     }
 }
 
+// ==================== TRANSPOSICIÓN ====================
+function transponerSeccion(seccionId, pasos) {
+    // Primero guardamos lo que el usuario haya escrito en la interfaz
+    guardarTodasLasSecciones();
+
+    const seccion = secciones.find(s => s.id === seccionId);
+    if (!seccion) return;
+    
+    if (!seccion.acordes.trim()) return;
+
+    function esAcordeValido(palabra) {
+        // Expresión regular robusta para detectar acordes sin depender del diccionario de escalas
+        const regexAcorde = /^([CDEFGAB][#b]?)(m|dim|aug)?(maj7|m7|7|9|11|13|sus2|sus4)?$/;
+        
+        if (regexAcorde.test(palabra)) return true;
+        
+        if (palabra.includes('/')) {
+            const partes = palabra.split('/');
+            if (partes.length === 2 && regexAcorde.test(partes[0]) && /^([CDEFGAB][#b]?)$/.test(partes[1])) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    const lineas = seccion.acordes.split('\n');
+    const nuevasLineas = lineas.map(linea => {
+        let nuevaLinea = "";
+        let palabraActual = "";
+        
+        for (let i = 0; i < linea.length; i++) {
+            const char = linea[i];
+            if (char.match(/[\s|()[\]{},\-]/)) {
+                if (palabraActual.length > 0) {
+                    if (esAcordeValido(palabraActual)) {
+                        nuevaLinea += transponerAcorde(palabraActual, pasos);
+                    } else {
+                        nuevaLinea += palabraActual;
+                    }
+                    palabraActual = "";
+                }
+                nuevaLinea += char;
+            } else {
+                palabraActual += char;
+            }
+        }
+        
+        if (palabraActual.length > 0) {
+            if (esAcordeValido(palabraActual)) {
+                nuevaLinea += transponerAcorde(palabraActual, pasos);
+            } else {
+                nuevaLinea += palabraActual;
+            }
+        }
+        
+        return nuevaLinea;
+    });
+    
+    seccion.acordes = nuevasLineas.join('\n');
+    actualizarVistaPrevia();
+}
+
+function transponerAcorde(acorde, pasos) {
+    const notasSostenidos = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const notasBemoles = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+    
+    const equivalencias = {
+        "Cb": "B",
+        "Fb": "E",
+        "E#": "F",
+        "B#": "C"
+    };
+    
+    function transponerNota(notaStr) {
+        const regexNota = /^([CDEFGAB][#b]?)(.*)$/;
+        const match = notaStr.match(regexNota);
+        
+        if (!match) return notaStr;
+        
+        let notaBase = match[1];
+        let resto = match[2] || "";
+        
+        if (equivalencias[notaBase]) {
+            notaBase = equivalencias[notaBase];
+        }
+        
+        let indice = notasSostenidos.indexOf(notaBase);
+        let usaSostenidos = true;
+        
+        if (indice === -1) {
+            indice = notasBemoles.indexOf(notaBase);
+            usaSostenidos = false;
+        }
+        
+        if (indice === -1) return notaStr;
+        
+        let nuevoIndice = (indice + pasos) % 12;
+        if (nuevoIndice < 0) nuevoIndice += 12;
+        
+        let nuevaNota = usaSostenidos ? notasSostenidos[nuevoIndice] : notasBemoles[nuevoIndice];
+        return nuevaNota + resto;
+    }
+
+    if (acorde.includes('/')) {
+        const partes = acorde.split('/');
+        return transponerNota(partes[0]) + '/' + transponerNota(partes[1]);
+    } else {
+        return transponerNota(acorde);
+    }
+}
+
 // ==================== EVENTOS EDITABLES ====================
 function agregarEventListenersEditables() {
     // Manejar líneas de acordes
@@ -595,8 +865,15 @@ function agregarEventListenersEditables() {
         linea.addEventListener('input', handleAcordeInput);
         
         // Guardar posición al hacer clic o escribir
+        linea.removeEventListener('click', guardarPosicionFoco);
         linea.addEventListener('click', guardarPosicionFoco);
+        
+        linea.removeEventListener('keyup', guardarPosicionFoco);
         linea.addEventListener('keyup', guardarPosicionFoco);
+        
+        // Agregar blur para formatear
+        linea.removeEventListener('blur', handleAcordeBlur);
+        linea.addEventListener('blur', handleAcordeBlur);
     });
     
     // Manejar títulos de sección
@@ -663,6 +940,40 @@ function handleTituloInput(e) {
             const partes = texto.split(' ');
             const numero = partes[partes.length - 1];
             seccion.tipo = isNaN(numero) ? texto : partes.slice(0, -1).join(' ');
+        }
+    }
+}
+
+function handleAcordeBlur(e) {
+    const linea = e.target;
+    const contentDiv = linea.closest('.acordes-content');
+    const seccionDiv = linea.closest('.seccion');
+    
+    if (contentDiv && seccionDiv) {
+        const seccionId = parseInt(seccionDiv.dataset.seccionId);
+        const seccion = secciones.find(s => s.id === seccionId);
+        if (seccion) {
+            // Guardar estado actual
+            guardarTodasLasSecciones();
+            
+            const btnFormato = document.getElementById('autoFormato');
+            if (btnFormato && btnFormato.checked) {
+                const formateado = formatearTextoAcordes(seccion.acordes);
+                if (formateado !== seccion.acordes) {
+                    seccion.acordes = formateado;
+                    
+                    // Re-renderizar solo esta sección para no perder el foco global
+                    const nuevasLineas = formateado.split('\n');
+                    contentDiv.innerHTML = '';
+                    nuevasLineas.forEach(l => {
+                        const div = document.createElement('div');
+                        div.className = 'acorde-linea';
+                        div.textContent = l || ' ';
+                        contentDiv.appendChild(div);
+                    });
+                    agregarEventListenersEditables();
+                }
+            }
         }
     }
 }
@@ -1014,7 +1325,7 @@ function inicializarDragBarra(element) {
     let initialLeft = 0, initialTop = 0;
     
     const dragStart = (e) => {
-        if (e.target.closest('.barra-flotante-close') || e.target.closest('.btn-toggle-flotante') || e.target.closest('button') || e.target.closest('input')) return;
+        if (e.target.closest('.btn-toggle-flotante') || e.target.closest('button') || e.target.closest('input')) return;
         
         isDragging = true;
         const clientX = e.clientX || e.touches[0].clientX;
@@ -1098,6 +1409,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (element) element.addEventListener('input', actualizarVistaPrevia);
     });
     
+    const autoFormato = document.getElementById('autoFormato');
+    if (autoFormato) autoFormato.addEventListener('change', aplicarFormatoGlobal);
+    
     const colorPicker = document.getElementById('paintColorPickerBarra');
     if (colorPicker) colorPicker.addEventListener('change', (e) => cambiarColorPaint(e.target.value));
     
@@ -1113,5 +1427,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     document.addEventListener('click', handleShowBarra);
-    document.addEventListener('touchstart', handleShowBarra, { passive: true });
+    
+    // Evitar que los botones de la barra flotante roben el foco del input
+    document.querySelectorAll('.barra-flotante button').forEach(btn => {
+        btn.addEventListener('mousedown', e => e.preventDefault());
     });
+});
