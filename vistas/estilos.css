@@ -5,26 +5,115 @@ body {
 }
 
 .hero-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 15px;
-    padding: 2rem;
-    color: white;
+    background: transparent;
+    border-radius: 0;
+    padding: 1.5rem 0;
+    color: #1a252f;
 }
 
 .hero-section h1 {
-    color: white !important;
+    color: #1a252f !important;
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
 }
 
 .hero-section p {
-    color: rgba(255, 255, 255, 0.9) !important;
+    color: #6c757d !important;
+    font-size: clamp(0.9rem, 2vw, 1.25rem);
+}
+
+.hover-lift {
+    transition: all 0.3s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 768px) {
+    .hero-section {
+        padding: 1rem 0;
+    }
+
+    .hero-section h1 {
+        font-size: 1.5rem;
+    }
+
+    .hero-section p {
+        font-size: 0.9rem;
+    }
+}
+
+/* Importar Partitura Section */
+.importar-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    transition: all 0.3s ease;
+}
+
+.importar-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.importar-icon-wrapper {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    color: white;
+    font-size: 24px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.importar-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+}
+
+.importar-btn:hover {
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.importar-btn:active {
+    transform: translateY(0);
+}
+
+/* Info card header responsive */
+.info {
+    padding: 1rem 1.25rem;
+}
+
+@media (max-width: 768px) {
+    .info {
+        padding: 0.75rem 1rem;
+    }
+
+    .info h2 {
+        font-size: 1rem;
+    }
+
+    .info .btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+    }
 }
 
 /* Vista previa */
 .vista-previa {
     background: white;
     border-radius: 12px;
-    padding: 30px;
-    margin-bottom: 30px;
+    padding: 20px;
+    margin-bottom: 10px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.1);
     position: relative;
     overflow-y: auto;
@@ -523,10 +612,10 @@ body.export-mode #barraFlotanteContainer {
     position: relative;
     justify-content: flex-start;
     overflow-x: auto;
-    margin: 20px 0;
+    margin: 10px 0;
     background: linear-gradient(145deg, #2c3e50 0%, #1a252f 100%);
-    padding: 30px 20px 40px 20px;
-    border-radius: 15px;
+    padding: 15px 10px 20px 10px;
+    border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     scrollbar-width: thin;
     scrollbar-color: #ffc107 #2c3e50;

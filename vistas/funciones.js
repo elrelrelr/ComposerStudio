@@ -9,6 +9,98 @@ let paintData = new Map();
 let ultimaSeccionFocoId = null;
 let ultimaLineaFocoIndice = 0;
 let ultimoOffsetFoco = 0;
+let secuenciaTransicion = [];
+window._playbackTimers = [];
+
+// ==================== SISTEMA DE TRANSICIONES (→) ====================
+function abrirModalTransicion(callback) {
+    const modalElement = document.getElementById('modalTransicion');
+    const modal = new bootstrap.Modal(modalElement);
+    const listaSecciones = document.getElementById('listaSeccionesTransicion');
+    const inputRep = document.getElementById('repeticionesTransicion');
+    const btnConfirmar = document.getElementById('btnConfirmarTransicion');
+    const previewTexto = document.getElementById('previewTransicionTexto');
+    const btnPuntos = document.getElementById('btnAgregarPuntosTransicion');
+    const btnLimpiar = document.getElementById('btnLimpiarTransicion');
+    
+    // Limpiar estado
+    secuenciaTransicion = [];
+    inputRep.value = 1;
+
+    const actualizarPreview = () => {
+        let texto = '→ ';
+        if (secuenciaTransicion.length > 0) {
+            texto += secuenciaTransicion.join(', ');
+            const rep = parseInt(inputRep.value) || 1;
+            if (rep > 1) {
+                texto += ` x${rep}`;
+            }
+        }
+        previewTexto.textContent = texto;
+    };
+
+    actualizarPreview();
+    
+    // Poblar secciones únicas
+    listaSecciones.innerHTML = '';
+    const tiposUnicos = [...new Set(secciones.map(s => s.tipo))];
+    tiposUnicos.forEach(tipo => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-outline-primary btn-sm';
+        btn.textContent = tipo;
+        btn.onclick = () => {
+            secuenciaTransicion.push(tipo);
+            actualizarPreview();
+        };
+        listaSecciones.appendChild(btn);
+    });
+
+    btnPuntos.onclick = () => {
+        secuenciaTransicion.push('...');
+        actualizarPreview();
+    };
+
+    btnLimpiar.onclick = () => {
+        secuenciaTransicion = [];
+        actualizarPreview();
+    };
+
+    inputRep.oninput = actualizarPreview;
+
+    // Manejar confirmación
+    btnConfirmar.onclick = () => {
+        actualizarPreview();
+        const resultado = previewTexto.textContent;
+        modal.hide();
+        callback(resultado + ' ');
+    };
+
+    modal.show();
+}
+
+function detenerReproduccionPiano() {
+    if (window._playbackTimers) {
+        window._playbackTimers.forEach(timerId => clearTimeout(timerId));
+        window._playbackTimers = [];
+    }
+    detenerMetronomo();
+    limpiarMarcasPiano(false);
+    const pianoDisplay = document.getElementById('pianoDisplay');
+    if (pianoDisplay) {
+        pianoDisplay.innerHTML = '<span class="text-danger fw-bold">DETENIDO</span>';
+        setTimeout(() => { 
+            if (pianoDisplay.textContent === 'DETENIDO') pianoDisplay.textContent = ''; 
+        }, 1500);
+    }
+    
+    // Resetear botón metrónomo
+    const btnMet = document.getElementById('btnMetronomo');
+    if (btnMet) {
+        btnMet.classList.remove('btn-danger', 'active');
+        btnMet.classList.add('btn-outline-primary');
+        btnMet.innerHTML = '<i class="bi bi-metronome"></i>';
+    }
+}
 
 // Escalas para sugerencia de tonalidad
 const escalas = {
@@ -18,28 +110,24 @@ const escalas = {
     "A": ["A", "Bm", "C#m", "D", "E", "F#m", "G#dim"],
     "E": ["E", "F#m", "G#m", "A", "B", "C#m", "D#dim"],
     "B": ["B", "C#m", "D#m", "E", "F#", "G#m", "A#dim"],
-    "F#": ["F#", "G#dim", "A", "B", "C#", "D#m", "E"],
-    "C#": ["C#", "D#dim", "E", "F#", "G#", "A#m", "B"],
-    "Cb": ["Cb", "D", "E", "F", "G", "A", "B"],
-    "F": ["F", "Gm", "Am", "Bb", "C", "Dm", "Edim"],
-    "Bb": ["Bb", "Cm", "Dm", "Eb", "F", "Gm", "Adim"],
+    "F#": ["F#", "G#m", "A#m", "B", "C#", "D#m", "E#dim"],
+    "Db": ["Db", "Ebm", "Fm", "Gb", "Ab", "Bbm", "Cdim"],
+    "Ab": ["Ab", "Bbm", "Cm", "Db", "Eb", "Fm", "Gdim"],
     "Eb": ["Eb", "Fm", "Gm", "Ab", "Bb", "Cm", "Ddim"],
-    "Db": ["Db", "Edim", "F", "Gb", "Ab", "Bbm", "Cm"],
-    "Gb": ["Gb", "Abm", "Bbm", "Cb", "Db", "Ebm", "Fm"],
+    "Bb": ["Bb", "Cm", "Dm", "Eb", "F", "Gm", "Adim"],
+    "F": ["F", "Gm", "Am", "Bb", "C", "Dm", "Edim"],
     "Am": ["Am", "Bdim", "C", "Dm", "Em", "F", "G"],
     "Em": ["Em", "F#dim", "G", "Am", "Bm", "C", "D"],
     "Bm": ["Bm", "C#dim", "D", "Em", "F#m", "G", "A"],
     "F#m": ["F#m", "G#dim", "A", "Bm", "C#m", "D", "E"],
     "C#m": ["C#m", "D#dim", "E", "F#m", "G#m", "A", "B"],
     "G#m": ["G#m", "A#dim", "B", "C#m", "D#m", "E", "F#"],
-    "D#m": ["D#m", "E#dim", "F#", "G#m", "A#m", "B", "C#"],
-    "A#m": ["A#m", "B#dim", "C#", "D#m", "E#m", "F#", "G#"],
-    "Fm": ["Fm", "Gdim", "Ab", "Bbm", "Cm", "Db", "Edim"],
+    "Fm": ["Fm", "Gdim", "Ab", "Bbm", "Cm", "Db", "Eb"],
     "Cm": ["Cm", "Ddim", "Eb", "Fm", "Gm", "Ab", "Bb"],
     "Gm": ["Gm", "Adim", "Bb", "Cm", "Dm", "Eb", "F"],
-    "Abm": ["Abm", "Bdim", "Cb", "Dbm", "Ebm", "Fb", "Gb"],
-    "Ebm": ["Ebm", "Fm", "Gb", "Abm", "Bbm", "Cb", "Db"],
-    "Bbm": ["Bbm", "Cm", "Db", "Ebm", "Fm", "Gb", "Ab"]
+    "D#m": ["D#m", "Fdim", "F#", "G#m", "A#m", "B", "C#"],
+    "Bbm": ["Bbm", "Cm", "Db", "Ebm", "Fm", "Gb", "Ab"],
+    "Dm": ["Dm", "Edim", "F", "Gm", "Am", "Bb", "C"]
 };
 
 // ==================== SISTEMA DESHACER (UNDO) ====================
@@ -199,28 +287,158 @@ function aplicarFormatoGlobal() {
 
 // ==================== FUNCIONES PRINCIPALES ====================
 function agregarSeccion(tipo) {
+    if (tipo === 'Melodía') {
+        if (secciones.length === 0) {
+            mostrarNotificacion('Primero agrega secciones con acordes para poder sugerirte una melodía', 'warning');
+            return;
+        }
+        abrirModalMelodia();
+        return;
+    }
+
     const id = Date.now();
-    secciones.push({ 
-        id: id, 
-        tipo: tipo, 
-        acordes: '', 
+    secciones.push({
+        id: id,
+        tipo: tipo,
+        acordes: '',
         paintData: null,
         tonalidadSugerida: null,
         tiempo: null, // null usa el global
-        bpm: null    // null usa el global
+        bpm: null,    // null usa el global
+        modoPiano: 'acorde' // 'acorde' o 'nota'
     });
-    
+
     // Forzar que la nueva sección sea el objetivo del foco
     ultimaSeccionFocoId = id;
     ultimaLineaFocoIndice = 0;
     ultimoOffsetFoco = 0;
-    
+
     guardarTodasLasSecciones();
     actualizarVistaPrevia();
     mostrarBarraFlotante();
     guardarHistorial();
 }
 
+function abrirModalMelodia() {
+    const modalElement = document.getElementById('modalMelodia');
+    const modal = new bootstrap.Modal(modalElement);
+    const listaBases = document.getElementById('listaSeccionesBaseMelodia');
+    const sugerenciasContainer = document.getElementById('sugerenciasMelodiaContainer');
+    const notasSugeridas = document.getElementById('notasSugeridasMelodia');
+    const acordesSugeridos = document.getElementById('acordesSugeridosMelodia');
+    const btnConfirmar = document.getElementById('btnConfirmarMelodia');
+
+    let seccionesSeleccionadas = new Set();
+    sugerenciasContainer.style.display = 'none';
+
+    listaBases.innerHTML = '';
+    secciones.forEach(s => {
+        if (s.tipo === 'Melodía') return;
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-outline-dark btn-sm';
+        btn.textContent = s.tipo;
+        btn.onclick = () => {
+            if (seccionesSeleccionadas.has(s.id)) {
+                seccionesSeleccionadas.delete(s.id);
+                btn.classList.replace('btn-dark', 'btn-outline-dark');
+            } else {
+                seccionesSeleccionadas.add(s.id);
+                btn.classList.replace('btn-outline-dark', 'btn-dark');
+            }
+            actualizarSugerenciasMelodia();
+        };
+        listaBases.appendChild(btn);
+    });
+
+    const actualizarSugerenciasMelodia = () => {
+        if (seccionesSeleccionadas.size === 0) {
+            sugerenciasContainer.style.display = 'none';
+            return;
+        }
+
+        sugerenciasContainer.style.display = 'block';
+        notasSugeridas.innerHTML = '';
+        acordesSugeridos.innerHTML = '';
+
+        // Recopilar acordes de las secciones seleccionadas
+        let todosLosAcordes = "";
+        seccionesSeleccionadas.forEach(id => {
+            const s = secciones.find(sec => sec.id === id);
+            if (s) todosLosAcordes += " " + s.acordes;
+        });
+
+        const tono = calcularTonalidad(todosLosAcordes);
+        if (tono && escalas[tono]) {
+            const escala = escalas[tono];
+
+            // Notas de la escala (simplificado para sugerencia)
+            escala.forEach(ac => {
+                const nota = ac.match(/^[A-G][#b]?/)[0];
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-success';
+                badge.style.cursor = 'pointer';
+                badge.textContent = nota;
+                badge.onclick = () => {
+                    insertarEnSeccion(` ${nota} `);
+                    mostrarNotificacion(`Nota ${nota} añadida a la melodía`, 'info');
+                };
+                notasSugeridas.appendChild(badge);
+
+                const badgeAc = document.createElement('span');
+                badgeAc.className = 'badge bg-primary';
+                badgeAc.style.cursor = 'pointer';
+                badgeAc.textContent = ac;
+                badgeAc.onclick = () => {
+                    insertarEnSeccion(` ${ac} `);
+                    mostrarNotificacion(`Acorde ${ac} añadido a la melodía`, 'info');
+                };
+                acordesSugeridos.appendChild(badgeAc);
+            });
+        }
+    };
+
+    btnConfirmar.onclick = () => {
+        const id = Date.now();
+        let tipoFinal = 'Melodía';
+        if (seccionesSeleccionadas.size > 0) {
+            const nombres = Array.from(seccionesSeleccionadas)
+                .map(sid => secciones.find(s => s.id === sid).tipo);
+            tipoFinal += ` (sobre ${nombres.join(', ')})`;
+        }
+
+        secciones.push({
+            id: id,
+            tipo: tipoFinal,
+            acordes: '',
+            paintData: null,
+            tonalidadSugerida: null,
+            tiempo: null,
+            bpm: null,
+            modoPiano: 'nota' // Por defecto para melodía
+        });
+
+        ultimaSeccionFocoId = id;
+        ultimaLineaFocoIndice = 0;
+        ultimoOffsetFoco = 0;
+
+        guardarTodasLasSecciones();
+        actualizarVistaPrevia();
+        modal.hide();
+        mostrarNotificacion('Sección de Melodía creada con éxito', 'success');
+        guardarHistorial();
+    };
+
+    modal.show();
+}
+    function cambiarModoPianoSeccion(id) {
+    const seccion = secciones.find(s => s.id === id);
+    if (!seccion) return;
+
+    seccion.modoPiano = seccion.modoPiano === 'acorde' ? 'nota' : 'acorde';
+    mostrarNotificacion(`Modo de reproducción cambiado a: ${seccion.modoPiano === 'acorde' ? 'Acordes' : 'Notas individuales'}`, 'info');
+    actualizarVistaPrevia();
+    guardarHistorial();
+    }
 function cambiarTiempoSeccion(id) {
     const seccion = secciones.find(s => s.id === id);
     if (!seccion) return;
@@ -278,7 +496,15 @@ function actualizarVistaPrevia() {
     
     if (album) html += `<div style="font-size: 16px; color: #555;">Álbum: ${escapeHtml(album)}</div>`;
     if (genero) html += `<div style="font-size: 16px; color: #555;">Género: ${escapeHtml(genero)}</div>`;
-    html += `<div style="font-size: 16px; color: #555;">Compás: ${tiempo} | Tonalidad: ${tonalidad}</div></div>`;
+    
+    let infoExtra = [];
+    if (tiempo) infoExtra.push(`Compás: ${tiempo}`);
+    if (tonalidad) infoExtra.push(`Tonalidad: ${tonalidad}`);
+    
+    if (infoExtra.length > 0) {
+        html += `<div style="font-size: 16px; color: #555;">${infoExtra.join(' | ')}</div>`;
+    }
+    html += `</div>`;
     
     if (letra.trim() && incluirLetra) {
         html += `<div style="margin-bottom: 25px;">
@@ -314,6 +540,9 @@ function actualizarVistaPrevia() {
                         </button>
                         <button class="btn-duplicar-instrumento no-print text-danger" onclick="cambiarBpmSeccion(${seccion.id})" title="Cambiar velocidad (BPM) de esta sección">
                             <span style="font-size: 10px; font-weight: bold;">${seccion.bpm || 'B'}</span>
+                        </button>
+                        <button class="btn-duplicar-instrumento no-print text-success" onclick="cambiarModoPianoSeccion(${seccion.id})" title="Alternar entre modo Acorde y modo Nota">
+                            <span style="font-size: 10px; font-weight: bold;">${seccion.modoPiano === 'acorde' ? 'A' : 'N'}</span>
                         </button>
                         <button class="btn-duplicar-instrumento no-print text-warning" onclick="tocarSeccionEnPiano(${seccion.id})" title="Tocar esta sección en el piano">
                             <i class="bi bi-play-fill"></i>
@@ -367,10 +596,11 @@ function actualizarVistaPrevia() {
     });
 
     restaurarFoco();
+    guardarEnLocalStorage();
 }
 
 // ==================== INSERCIÓN DE TEXTO ====================
-function insertarEnSeccion(texto) {
+function insertarEnSeccion(texto, omitirModal = false) {
     if (secciones.length === 0) {
         mostrarNotificacion('Primero agrega una sección musical', 'warning');
         return;
@@ -447,6 +677,14 @@ function insertarEnSeccion(texto) {
         } else {
             return;
         }
+    }
+
+    // Lógica especial para el símbolo de transición "→"
+    if (texto.trim() === '→' && !omitirModal) {
+        abrirModalTransicion((nuevoTexto) => {
+            insertarEnSeccion(nuevoTexto, true);
+        });
+        return; // Detener inserción normal
     }
         
         if (esRepeticion) {
@@ -717,6 +955,7 @@ function guardarPaintData(acordesElement) {
             paintData.set(seccionId, dataURL);
             const seccion = secciones.find(s => s.id === seccionId);
             if (seccion) seccion.paintData = dataURL;
+            guardarEnLocalStorage();
         }
     }
 }
@@ -1056,6 +1295,32 @@ function handleAcordeInput(e) {
     const contentDiv = linea.closest('.acordes-content');
     const seccionDiv = linea.closest('.seccion');
     
+    // Detectar si se acaba de escribir → (o si se pegó)
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const textNode = range.startContainer;
+        if (textNode.nodeType === Node.TEXT_NODE) {
+            const offset = range.startOffset;
+            const lastChar = textNode.textContent.substring(offset - 1, offset);
+            
+            if (lastChar === '→') {
+                // Quitar el símbolo recién escrito para manejarlo vía modal
+                const before = textNode.textContent.substring(0, offset - 1);
+                const after = textNode.textContent.substring(offset);
+                textNode.textContent = before + after;
+                
+                // Reposicionar cursor donde estaba el símbolo
+                range.setStart(textNode, offset - 1);
+                range.collapse(true);
+                
+                abrirModalTransicion((nuevoTexto) => {
+                    insertarEnSeccion(nuevoTexto, true);
+                });
+            }
+        }
+    }
+
     if (contentDiv && seccionDiv) {
         const seccionId = parseInt(seccionDiv.dataset.seccionId);
         const seccion = secciones.find(s => s.id === seccionId);
@@ -1229,9 +1494,9 @@ function exportarMarkdown() {
         if (seccion.tiempo) meta.push(`**Compás:** ${seccion.tiempo}`);
         if (seccion.bpm) meta.push(`**BPM:** ${seccion.bpm}`);
         if (seccion.tonalidadSugerida) meta.push(`**Tonalidad:** ${seccion.tonalidadSugerida}`);
-        
-        if (meta.length > 0) {
-            contenido += meta.join(' | ') + '\n';
+        if (seccion.modoPiano) meta.push(`**Reproducción:** ${seccion.modoPiano}`);
+
+        if (meta.length > 0) {            contenido += meta.join(' | ') + '\n';
         }
         contenido += '\n';
 
@@ -1337,7 +1602,7 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
         let seccionesImportadas = [];
         let lineaActual = '', tipoSeccion = '';
         let enLetra = false, enSeccion = false;
-        let seccionMetaActual = { tiempo: null, bpm: null, tonalidad: null };
+        let seccionMetaActual = { tiempo: null, bpm: null, tonalidad: null, modoPiano: 'acorde' };
         
         for (const line of lines) {
             if (line.startsWith('# ') && !nombre) {
@@ -1364,23 +1629,26 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
                         paintData: null,
                         tiempo: seccionMetaActual.tiempo,
                         bpm: seccionMetaActual.bpm,
-                        tonalidadSugerida: seccionMetaActual.tonalidad
+                        tonalidadSugerida: seccionMetaActual.tonalidad,
+                        modoPiano: seccionMetaActual.modoPiano || 'acorde'
                     });
                 }
                 tipoSeccion = line.replace('### ', '').trim().replace(/\s+\d+$/, '');
                 lineaActual = '';
-                seccionMetaActual = { tiempo: null, bpm: null, tonalidad: null };
+                seccionMetaActual = { tiempo: null, bpm: null, tonalidad: null, modoPiano: 'acorde' };
                 enSeccion = true;
                 enLetra = false;
-            } else if (enSeccion && line.includes('**Compás:**') || line.includes('**BPM:**') || line.includes('**Tonalidad:**')) {
+            } else if (enSeccion && (line.includes('**Compás:**') || line.includes('**BPM:**') || line.includes('**Tonalidad:**') || line.includes('**Reproducción:**'))) {
                 // Leer metadatos de la sección
                 const matchCompas = line.match(/\*\*Compás:\*\*\s*([^\s|]+)/);
                 const matchBpm = line.match(/\*\*BPM:\*\*\s*(\d+)/);
                 const matchTon = line.match(/\*\*Tonalidad:\*\*\s*([^\s|]+)/);
+                const matchModo = line.match(/\*\*Reproducción:\*\*\s*([^\s|]+)/);
                 
                 if (matchCompas) seccionMetaActual.tiempo = matchCompas[1];
                 if (matchBpm) seccionMetaActual.bpm = parseInt(matchBpm[1]);
                 if (matchTon) seccionMetaActual.tonalidad = matchTon[1];
+                if (matchModo) seccionMetaActual.modoPiano = matchModo[1];
             } else if (line.startsWith('```text')) {
                 lineaActual = '';
             } else if (line.startsWith('```') && line.trim() !== '```text') {
@@ -1400,7 +1668,8 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
                 paintData: null,
                 tiempo: seccionMetaActual.tiempo,
                 bpm: seccionMetaActual.bpm,
-                tonalidadSugerida: seccionMetaActual.tonalidad
+                tonalidadSugerida: seccionMetaActual.tonalidad,
+                modoPiano: seccionMetaActual.modoPiano || 'acorde'
             });
         }
         
@@ -1431,6 +1700,52 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
     reader.readAsText(file);
     event.target.value = '';
 });
+
+// ==================== LOCAL STORAGE ====================
+function guardarEnLocalStorage() {
+    const data = {
+        nombre: document.getElementById('nombrePieza')?.value || '',
+        artista: document.getElementById('artista')?.value || '',
+        album: document.getElementById('album')?.value || '',
+        genero: document.getElementById('genero')?.value || '',
+        tiempo: document.getElementById('tiempo')?.value || '',
+        tonalidad: document.getElementById('tonalidad')?.value || '',
+        letra: document.getElementById('letra')?.value || '',
+        incluirLetra: document.getElementById('incluirLetra')?.checked || false,
+        autoFormato: document.getElementById('autoFormato')?.checked || false,
+        exportarCompleta: document.getElementById('exportarCompleta')?.checked || false,
+        secciones: secciones,
+        paintData: Array.from(paintData.entries())
+    };
+    localStorage.setItem('composerStudio_save', JSON.stringify(data));
+}
+
+function cargarDesdeLocalStorage() {
+    const saved = localStorage.getItem('composerStudio_save');
+    if (!saved) return;
+
+    try {
+        const data = JSON.parse(saved);
+        
+        if (data.nombre !== undefined) document.getElementById('nombrePieza').value = data.nombre;
+        if (data.artista !== undefined) document.getElementById('artista').value = data.artista;
+        if (data.album !== undefined) document.getElementById('album').value = data.album;
+        if (data.genero !== undefined) document.getElementById('genero').value = data.genero;
+        if (data.tiempo !== undefined) document.getElementById('tiempo').value = data.tiempo;
+        if (data.tonalidad !== undefined) document.getElementById('tonalidad').value = data.tonalidad;
+        if (data.letra !== undefined) document.getElementById('letra').value = data.letra;
+        if (data.incluirLetra !== undefined) document.getElementById('incluirLetra').checked = data.incluirLetra;
+        if (data.autoFormato !== undefined) document.getElementById('autoFormato').checked = data.autoFormato;
+        if (data.exportarCompleta !== undefined) document.getElementById('exportarCompleta').checked = data.exportarCompleta;
+        
+        if (data.secciones) secciones = data.secciones;
+        if (data.paintData) paintData = new Map(data.paintData);
+        
+        actualizarVistaPrevia();
+    } catch (e) {
+        console.error("Error cargando de LocalStorage:", e);
+    }
+}
 
 // ==================== UTILIDADES ====================
 function escapeHtml(str) {
@@ -1573,11 +1888,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputs = ['nombrePieza', 'artista', 'album', 'genero', 'letra', 'tiempo', 'tonalidad', 'incluirLetra', 'exportarCompleta'];
     inputs.forEach(id => {
         const element = document.getElementById(id);
-        if (element) element.addEventListener('input', actualizarVistaPrevia);
+        if (element) element.addEventListener('input', () => {
+            actualizarVistaPrevia();
+            guardarEnLocalStorage();
+        });
     });
     
     const autoFormato = document.getElementById('autoFormato');
-    if (autoFormato) autoFormato.addEventListener('change', aplicarFormatoGlobal);
+    if (autoFormato) autoFormato.addEventListener('change', () => {
+        aplicarFormatoGlobal();
+        guardarEnLocalStorage();
+    });
     
     const colorPicker = document.getElementById('paintColorPickerBarra');
     if (colorPicker) colorPicker.addEventListener('change', (e) => cambiarColorPaint(e.target.value));
@@ -1600,6 +1921,25 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('mousedown', e => e.preventDefault());
     });
 
+    // Inicializar piano si existe
+    const pianoContainer = document.getElementById('pianoContainer');
+    if (pianoContainer) {
+        // Configurar teclas del piano para reproducción simple (sin modificar el modo)
+        document.querySelectorAll('.piano-key').forEach(key => {
+            key.addEventListener('click', (e) => {
+                // Si no estamos en modo selección de acorde, solo tocar y no insertar
+                if (!acordePendiente && acordePendiente !== '') {
+                    const nota = key.dataset.note;
+                    const octava = parseInt(key.dataset.octave) || 4;
+                    tocarNota(nota, octava);
+                    key.classList.add('active');
+                    setTimeout(() => key.classList.remove('active'), 150);
+                }
+            });
+        });
+    }
+
+    cargarDesdeLocalStorage();
     guardarHistorial();
 });
 
@@ -1685,6 +2025,13 @@ function detenerMetronomo() {
     metronomoActivo = false;
     clearInterval(metronomoTimer);
     metronomoTimer = null;
+    
+    const btn = document.getElementById('btnMetronomo');
+    if (btn) {
+        btn.classList.remove('btn-danger', 'active');
+        btn.classList.add('btn-outline-primary');
+        btn.innerHTML = '<i class="bi bi-metronome"></i>';
+    }
 }
 
 function tocarClickMetronomo(acento) {
@@ -1870,6 +2217,11 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
     const beatsPorCompasEfectivo = parseInt(compasEfectivo[0]) || 4;
 
     setTimeout(() => {
+        const pianoDisplay = document.getElementById('pianoDisplay');
+        if (pianoDisplay) {
+            pianoDisplay.innerHTML = `<span class="badge bg-primary me-2">${seccion.tipo}</span>`;
+        }
+
         if (metronomoActivo) {
             beatsPorCompasMetronomo = beatsPorCompasEfectivo;
             beatActual = 0;
@@ -1891,6 +2243,46 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
 
     lineas.forEach(linea => {
         if (!linea.trim()) return;
+
+        // Lógica de transición →
+        if (linea.includes('→')) {
+            const partes = linea.split('→');
+            const transicion = partes[partes.length - 1].trim();
+            
+            // Si hay contenido estructural (nombres de secciones)
+            if (transicion && !transicion.match(/^[A-G#b|]+$/i)) {
+                // Analizar secuencia: Voz, Coro x2, ...
+                const secuencia = transicion.split(',').map(s => s.trim());
+                let subTiempoAcumulado = tiempoRelativo;
+
+                secuencia.forEach(item => {
+                    const match = item.match(/^(.+?)(?:\s+x(\d+))?$/);
+                    let nombreSeccion = match ? match[1].trim() : item.trim();
+                    const reps = match && match[2] ? parseInt(match[2]) : 1;
+                    
+                    if (nombreSeccion === '...') {
+                        // Tocar todo lo que falta de la canción
+                        const idxActual = secciones.indexOf(seccion);
+                        const siguientes = secciones.slice(idxActual + 1);
+                        siguientes.forEach(s => {
+                            const dur = tocarSeccionEnPiano(s.id, inicioRetraso + subTiempoAcumulado);
+                            subTiempoAcumulado += dur + 500;
+                        });
+                    } else {
+                        // Buscar sección por tipo
+                        const destino = secciones.find(s => s.tipo.toLowerCase() === nombreSeccion.toLowerCase());
+                        if (destino) {
+                            for (let r = 0; r < reps; r++) {
+                                const dur = tocarSeccionEnPiano(destino.id, inicioRetraso + subTiempoAcumulado);
+                                subTiempoAcumulado += dur + 500;
+                            }
+                        }
+                    }
+                });
+                // No sumamos tiempoRelativo aquí porque las llamadas recursivas ya usan el inicioRetraso
+                return; 
+            }
+        }
 
         const esAcordeModo = linea.includes('|');
         
@@ -1924,17 +2316,13 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
                 });
 
                 const pesoTotalCompas = tokensProcesados.reduce((sum, t) => sum + t.peso, 0);
-                // Determinamos cuántos beats totales le corresponden a cada token (pueden ser decimales si el peso no es exacto)
-                // Pero intentaremos redondear a enteros para que el piano "marque" pulsos claros.
                 
                 tokensProcesados.forEach((tokenObj) => {
-                    // Calculamos cuántos beats (pulsos) dura este token
                     const numBeatsToken = (tokenObj.peso / pesoTotalCompas) * beatsPorCompasEfectivo;
                     
                     for (let b = 0; b < numBeatsToken; b++) {
                         const tiempoDeEsteBeat = inicioRetraso + tiempoRelativo;
 
-                        // Solo tocar si no es un silencio (--)
                         if (tokenObj.texto !== '--') {
                             const match = tokenObj.texto.match(/^([CDEFGAB][#b]?)(m|dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?(maj7|m7|7|9|11|13)?(?:\/([CDEFGAB][#b]?))?$/i);
                             
@@ -1943,18 +2331,29 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
                                 const sufijo = (match[2] || '') + (match[3] || '');
                                 const bajo = match[4] ? match[4].toUpperCase() : null;
 
-                                setTimeout(() => {
+                                const tId = setTimeout(() => {
                                     limpiarMarcasPiano(false);
-                                    if (pianoDisplay) pianoDisplay.textContent = tokenObj.original;
-                                    tocarAcordeCompleto(notaBase, sufijo, bajo);
+                                    if (pianoDisplay) {
+                                        pianoDisplay.innerHTML = `<span class="badge bg-primary me-2">${seccion.tipo}</span> <span class="text-primary">${tokenObj.original}</span>`;
+                                    }
+                                    
+                                    if (seccion.modoPiano === 'nota' && !sufijo && !bajo) {
+                                        tocarNota(notaBase, 4);
+                                        resaltarTeclaPiano(notaBase, 4, tiempoPorBeat / 1.5);
+                                    } else {
+                                        tocarAcordeCompleto(notaBase, sufijo, bajo);
+                                    }
                                 }, tiempoDeEsteBeat);
+                                window._playbackTimers.push(tId);
                             }
                         } else {
-                            // Es un silencio, opcionalmente limpiar el display o mostrar algo
-                            setTimeout(() => {
+                            const tId = setTimeout(() => {
                                 limpiarMarcasPiano(false);
-                                if (pianoDisplay) pianoDisplay.textContent = ' (silencio) ';
+                                if (pianoDisplay) {
+                                    pianoDisplay.innerHTML = `<span class="badge bg-primary me-2">${seccion.tipo}</span> <span class="text-muted">(silencio)</span>`;
+                                }
                             }, tiempoDeEsteBeat);
+                            window._playbackTimers.push(tId);
                         }
                         
                         tiempoRelativo += tiempoPorBeat;
@@ -1971,16 +2370,20 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
                     const sufijo = (match[2] || '') + (match[3] || '');
                     const bajo = match[4] ? match[4].toUpperCase() : null;
 
-                    setTimeout(() => {
+                    const tId = setTimeout(() => {
                         limpiarMarcasPiano(false);
-                        if (pianoDisplay) pianoDisplay.textContent = token;
-                        if (sufijo || bajo) {
-                            tocarAcordeCompleto(notaBase, sufijo, bajo);
-                        } else {
+                        if (pianoDisplay) {
+                            pianoDisplay.innerHTML = `<span class="badge bg-primary me-2">${seccion.tipo}</span> <span class="text-primary">${token}</span>`;
+                        }
+                        
+                        if (seccion.modoPiano === 'nota' && !sufijo && !bajo) {
                             tocarNota(notaBase, 4);
                             resaltarTeclaPiano(notaBase, 4, tiempoPorBeat / 1.5);
+                        } else {
+                            tocarAcordeCompleto(notaBase, sufijo, bajo);
                         }
                     }, inicioRetraso + tiempoRelativo);
+                    window._playbackTimers.push(tId);
                     tiempoRelativo += tiempoPorBeat;
                 }
             });
@@ -1996,6 +2399,7 @@ function tocarCancionCompletaEnPiano() {
         return;
     }
 
+    detenerReproduccionPiano(); // Limpiar previas
     mostrarNotificacion('Iniciando reproducción de la canción completa...', 'success');
     
     // Scroll al piano al empezar
@@ -2014,17 +2418,19 @@ function tocarCancionCompletaEnPiano() {
     });
 
     // Limpiar el display al terminar toda la canción
-    setTimeout(() => {
+    const endId = setTimeout(() => {
         const pianoDisplay = document.getElementById('pianoDisplay');
         if (pianoDisplay) pianoDisplay.textContent = 'FIN';
         setTimeout(() => { if (pianoDisplay) pianoDisplay.textContent = ''; }, 2000);
         detenerMetronomo();
         const btn = document.getElementById('btnMetronomo');
         if (btn) {
-            btn.classList.remove('btn-primary');
+            btn.classList.remove('btn-danger', 'active');
             btn.classList.add('btn-outline-primary');
+            btn.innerHTML = '<i class="bi bi-metronome"></i>';
         }
     }, tiempoAcumulado);
+    window._playbackTimers.push(endId);
 }
 
 function tocarAcordeCompleto(notaBase, sufijo, bajo = null) {
@@ -2098,28 +2504,3 @@ function limpiarMarcasPiano(mostrarNotif = true) {
         if (pianoDisplay) pianoDisplay.textContent = '';
     }
 }
-
-// Modificar la inicialización del piano
-document.addEventListener('DOMContentLoaded', () => {
-    // ... código existente ...
-    
-    // Inicializar piano si existe
-    const pianoContainer = document.getElementById('pianoContainer');
-    if (pianoContainer) {
-        pianoContainer.style.display = 'none';
-        
-        // Configurar teclas del piano para reproducción simple (sin modificar el modo)
-        document.querySelectorAll('.piano-key').forEach(key => {
-            key.addEventListener('click', (e) => {
-                // Si no estamos en modo selección de acorde, solo tocar y no insertar
-                if (!acordePendiente && acordePendiente !== '') {
-                    const nota = key.dataset.note;
-                    const octava = parseInt(key.dataset.octave) || 4;
-                    tocarNota(nota, octava);
-                    key.classList.add('active');
-                    setTimeout(() => key.classList.remove('active'), 150);
-                }
-            });
-        });
-    }
-});
