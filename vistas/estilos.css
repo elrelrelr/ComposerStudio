@@ -734,3 +734,26 @@ body.export-mode #barraFlotanteContainer {
         font-size: 9px;
     }
 }
+
+/* Estilo para los badges de acordes (sostenidos y bemoles elevados) */
+.music-badge {
+    font-size: 0.9em !important;
+    padding: 0 !important;
+    vertical-align: super !important;
+    line-height: 1 !important;
+    margin-left: 1px !important;
+    margin-right: 2px !important;
+    display: inline-block !important;
+    transform: translateY(-0.1em);
+    background-color: transparent !important;
+    color: inherit !important;
+    border: none !important;
+    font-weight: bold !important;
+}
+
+@media print {
+    .music-badge {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}

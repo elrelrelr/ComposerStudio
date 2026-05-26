@@ -71,12 +71,87 @@ function abrirModalTransicion(callback) {
     btnConfirmar.onclick = () => {
         actualizarPreview();
         const resultado = previewTexto.textContent;
+        
+        let hiddenHandler = () => {
+            modalElement.removeEventListener('hidden.bs.modal', hiddenHandler);
+            callback(resultado + ' ');
+        };
+        modalElement.addEventListener('hidden.bs.modal', hiddenHandler);
         modal.hide();
-        callback(resultado + ' ');
     };
 
     modal.show();
 }
+
+function abrirModalBadge(callback) {
+    const modalElement = document.getElementById('modalBadge');
+    const modal = new bootstrap.Modal(modalElement);
+    const badgeTexto = document.getElementById('badgeTexto');
+    const badgePreviewSpan = document.getElementById('badgePreviewSpan');
+    const btnConfirmar = document.getElementById('btnConfirmarBadge');
+    
+    // Reset inputs
+    badgeTexto.value = '';
+    badgePreviewSpan.className = 'badge bg-primary';
+    badgePreviewSpan.textContent = 'Badge';
+    
+    // Select default radio button (primary)
+    const radioPrimary = document.getElementById('btnRadioPrimary');
+    if (radioPrimary) radioPrimary.checked = true;
+
+    const obtenerColorSeleccionado = () => {
+        const radios = document.getElementsByName('badgeColorRadio');
+        for (const r of radios) {
+            if (r.checked) return r.value;
+        }
+        return 'primary';
+    };
+
+    const actualizarPreview = () => {
+        const text = badgeTexto.value.trim() || 'Badge';
+        const color = obtenerColorSeleccionado();
+        
+        let textColorClass = '';
+        if (color === 'warning' || color === 'info' || color === 'light') {
+            textColorClass = ' text-dark';
+        }
+        
+        badgePreviewSpan.className = `badge bg-${color}${textColorClass}`;
+        badgePreviewSpan.textContent = text;
+    };
+
+    // Listen to events
+    badgeTexto.oninput = actualizarPreview;
+    
+    const radios = document.getElementsByName('badgeColorRadio');
+    radios.forEach(radio => {
+        radio.onchange = actualizarPreview;
+    });
+
+    btnConfirmar.onclick = () => {
+        const text = badgeTexto.value.trim();
+        if (!text) {
+            mostrarNotificacion('Por favor, escribe un texto para el badge', 'warning');
+            return;
+        }
+        const color = obtenerColorSeleccionado();
+        const syntax = ` [badge-${color}:${text}] `;
+        
+        let hiddenHandler = () => {
+            modalElement.removeEventListener('hidden.bs.modal', hiddenHandler);
+            if (callback) {
+                callback(syntax);
+            } else {
+                insertarEnSeccion(syntax);
+            }
+        };
+        modalElement.addEventListener('hidden.bs.modal', hiddenHandler);
+        modal.hide();
+    };
+
+    modal.show();
+}
+
 
 function detenerReproduccionPiano() {
     if (window._playbackTimers) {
@@ -224,6 +299,10 @@ function formatearTextoAcordes(texto) {
             return p1 + contenidoProcesado + p3;
         });
 
+        // Regla: Unir números solitarios con la barra anterior (ej: "| 2" -> "|2")
+        // Solo si el número no está precedido por una nota de acorde (como A7)
+        linea = linea.replace(/\|\s+(\d+)/g, '|$1');
+
         // Normalizar espacios alrededor de barras de compás y colapsar espacios múltiples
         linea = linea.replace(/\s{2,}/g, ' '); // Colapsar múltiples espacios a uno solo
         linea = linea.replace(/\|\s+/g, '| '); // Máximo un espacio después de |
@@ -283,6 +362,99 @@ function aplicarFormatoGlobal() {
         });
         if (hayCambios) actualizarVistaPrevia();
     }
+}
+
+function formatearLineasConBadges(lineaTexto) {
+    if (!lineaTexto || !lineaTexto.trim()) return '&nbsp;';
+    let htmlEscapado = escapeHtml(lineaTexto);
+    
+    // Buscar notas base (C, D, E, F, G, A, B) seguidas de sostenido (#, ♯) o bemol (b, ♭)
+    // También buscar sostenidos, bemoles y símbolos especiales (𝄌) aislados para convertirlos en badges
+    htmlEscapado = htmlEscapado.replace(/([CDEFGAB])?([#b♭♯𝄌])/g, (match, nota, simbolo) => {
+        let simboloMostrar = simbolo;
+        
+        if (simbolo === 'b' || simbolo === '♭') {
+            simboloMostrar = '♭';
+        } else if (simbolo === '#' || simbolo === '♯') {
+            simboloMostrar = '♯';
+        }
+        
+        if (nota) {
+            return `${nota}<span class="music-badge">${simboloMostrar}</span>`;
+        } else {
+            return `<span class="music-badge">${simboloMostrar}</span>`;
+        }
+    });
+
+    // Reemplazar [badge-color:Texto] con la estructura de span de Bootstrap
+    htmlEscapado = htmlEscapado.replace(/\[badge-([a-z]+):(.*?)\]/g, (match, color, texto) => {
+        let textColorClass = '';
+        if (color === 'warning' || color === 'info' || color === 'light') {
+            textColorClass = ' text-dark';
+        }
+        return `<span class="badge bg-${color}${textColorClass} mx-1">${texto}</span>`;
+    });
+
+    // Reemplazar [badge:Texto] por defecto con color primary
+    htmlEscapado = htmlEscapado.replace(/\[badge:(.*?)\]/g, (match, texto) => {
+        return `<span class="badge bg-primary mx-1">${texto}</span>`;
+    });
+    
+    return htmlEscapado;
+}
+
+function handleAcordeFocus(e) {
+    const linea = e.target;
+    if (linea.querySelector('.badge') || linea.hasAttribute('data-raw')) {
+        const selection = window.getSelection();
+        let offset = 0;
+        const rawText = linea.getAttribute('data-raw') || linea.textContent;
+        
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+            
+            let totalOffset = 0;
+            const walk = document.createTreeWalker(linea, NodeFilter.SHOW_TEXT, null, false);
+            let n;
+            let found = false;
+            while (n = walk.nextNode()) {
+                if (n === container) {
+                    totalOffset += range.startOffset;
+                    found = true;
+                    break;
+                }
+                totalOffset += n.textContent.length;
+            }
+            if (found) {
+                offset = totalOffset;
+            } else {
+                offset = rawText.length;
+            }
+        }
+        
+        linea.textContent = rawText;
+        linea.removeAttribute('data-raw');
+        
+        // Restaurar posición del cursor
+        const range = document.createRange();
+        const sel = window.getSelection();
+        let n = linea.firstChild;
+        if (n && n.nodeType === Node.TEXT_NODE) {
+            range.setStart(n, Math.min(offset, n.textContent.length));
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    }
+}
+
+function obtenerTextoPlanoLinea(lineaElement) {
+    if (!lineaElement) return '';
+    if (lineaElement.hasAttribute('data-raw')) {
+        return lineaElement.getAttribute('data-raw');
+    }
+    return lineaElement.textContent.replace(/♯/g, '#').replace(/♭/g, 'b');
 }
 
 // ==================== FUNCIONES PRINCIPALES ====================
@@ -431,7 +603,7 @@ function abrirModalMelodia() {
     modal.show();
 }
     function cambiarModoPianoSeccion(id) {
-    const seccion = secciones.find(s => s.id === id);
+    const seccion = secciones.find(s => String(s.id) === String(id));
     if (!seccion) return;
 
     seccion.modoPiano = seccion.modoPiano === 'acorde' ? 'nota' : 'acorde';
@@ -440,7 +612,7 @@ function abrirModalMelodia() {
     guardarHistorial();
     }
 function cambiarTiempoSeccion(id) {
-    const seccion = secciones.find(s => s.id === id);
+    const seccion = secciones.find(s => String(s.id) === String(id));
     if (!seccion) return;
 
     const opciones = ["4/4", "3/4", "2/4", "6/8", "12/8", "Global"];
@@ -456,7 +628,7 @@ function cambiarTiempoSeccion(id) {
     }
 
     function cambiarBpmSeccion(id) {
-    const seccion = secciones.find(s => s.id === id);
+    const seccion = secciones.find(s => String(s.id) === String(id));
     if (!seccion) return;
 
     // Rotar BPM: Global -> 60 -> 80 -> 100 -> 120 -> 140 -> 160
@@ -473,8 +645,8 @@ function cambiarTiempoSeccion(id) {
     }
 function eliminarSeccion(id) {
     guardarTodasLasSecciones();
-    secciones = secciones.filter(s => s.id !== id);
-    paintData.delete(id);
+    secciones = secciones.filter(s => String(s.id) !== String(id));
+    paintData.delete(String(id));
     actualizarVistaPrevia();
     guardarHistorial(); // Guardar el nuevo estado después de eliminar
 }
@@ -568,10 +740,11 @@ function actualizarVistaPrevia() {
                 if (seccion.acordes.trim()) {
                     const lineas = seccion.acordes.split('\n');
                     lineas.forEach(linea => {
-                        html += `<div class="acorde-linea">${escapeHtml(linea.trim() || ' ')}</div>`;
+                        const lTrim = linea.trim() || ' ';
+                        html += `<div class="acorde-linea" data-raw="${escapeHtml(lTrim)}">${formatearLineasConBadges(lTrim)}</div>`;
                     });
                 } else {
-                    html += `<div class="acorde-linea"></div>`;
+                    html += `<div class="acorde-linea" data-raw=" ">&nbsp;</div>`;
                 }
                 
                 html += `</div>
@@ -588,7 +761,7 @@ function actualizarVistaPrevia() {
     
     // Restaurar dibujos guardados
     document.querySelectorAll('.acordes').forEach(element => {
-        const seccionId = parseInt(element.dataset.seccionId);
+        const seccionId = String(element.dataset.seccionId);
         // Si hay datos de dibujo o el modo está activo, inicializar canvas
         if (paintData.has(seccionId) || paintMode) {
             inicializarPaintCanvas(element);
@@ -608,7 +781,7 @@ function insertarEnSeccion(texto, omitirModal = false) {
 
     let textoAInsertar = texto;
     const esRepeticion = texto.trim().match(/^x\d+$/) || texto.trim() === 'x2';
-    
+
     // 1. Intentar obtener la posición actual (ya sea foco real o memoria)
     let selection = window.getSelection();
     let range = null;
@@ -617,13 +790,11 @@ function insertarEnSeccion(texto, omitirModal = false) {
     // Verificar si hay una selección activa dentro de una línea de acordes
     if (selection.rangeCount > 0) {
         const tempRange = selection.getRangeAt(0);
-        const container = tempRange.startContainer.nodeType === Node.TEXT_NODE ? 
+        const container = tempRange.startContainer.nodeType === Node.TEXT_NODE ?
                          tempRange.startContainer.parentElement : tempRange.startContainer;
         acordeLinea = container.closest('.acorde-linea');
         if (acordeLinea) {
             range = tempRange;
-            // Si encontramos la línea por selección real, actualizamos la memoria
-            guardarPosicionFoco();
         }
     }
 
@@ -633,11 +804,10 @@ function insertarEnSeccion(texto, omitirModal = false) {
         if (seccionDiv) {
             const lineas = seccionDiv.querySelectorAll('.acorde-linea');
             acordeLinea = lineas[ultimaLineaFocoIndice] || lineas[lineas.length - 1];
-            
+
             if (acordeLinea) {
                 acordeLinea.focus();
                 range = document.createRange();
-                // Restaurar offset de memoria
                 let totalOffset = 0;
                 const walk = document.createTreeWalker(acordeLinea, NodeFilter.SHOW_TEXT, null, false);
                 let n;
@@ -655,7 +825,6 @@ function insertarEnSeccion(texto, omitirModal = false) {
                     range.selectNodeContents(acordeLinea);
                     range.collapse(false);
                 }
-                range.collapse(true);
                 selection.removeAllRanges();
                 selection.addRange(range);
             }
@@ -673,10 +842,21 @@ function insertarEnSeccion(texto, omitirModal = false) {
             range.collapse(false);
             selection.removeAllRanges();
             selection.addRange(range);
-            guardarPosicionFoco();
         } else {
             return;
         }
+    }
+
+    // Asegurar que la línea no tenga badges activos mientras insertamos
+    if (acordeLinea.hasAttribute('data-raw')) {
+        acordeLinea.textContent = acordeLinea.getAttribute('data-raw');
+        acordeLinea.removeAttribute('data-raw');
+        // Re-obtener range tras limpiar HTML
+        range = document.createRange();
+        range.selectNodeContents(acordeLinea);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
     }
 
     // Lógica especial para el símbolo de transición "→"
@@ -684,113 +864,104 @@ function insertarEnSeccion(texto, omitirModal = false) {
         abrirModalTransicion((nuevoTexto) => {
             insertarEnSeccion(nuevoTexto, true);
         });
-        return; // Detener inserción normal
+        return;
     }
         
-        if (esRepeticion) {
-            // Lógica robusta para detectar repetición anterior
-            let container = range.startContainer;
-            let offset = range.startOffset;
-            let textNode = null;
-            
-            if (container.nodeType === Node.TEXT_NODE) {
-                textNode = container;
-            } else if (container.nodeType === Node.ELEMENT_NODE && offset > 0) {
-                const prevNode = container.childNodes[offset - 1];
-                if (prevNode && prevNode.nodeType === Node.TEXT_NODE) {
-                    textNode = prevNode;
-                    offset = textNode.length;
-                }
+    if (esRepeticion) {
+        let container = range.startContainer;
+        let offset = range.startOffset;
+        let textNode = null;
+        
+        if (container.nodeType === Node.TEXT_NODE) {
+            textNode = container;
+        } else if (container.nodeType === Node.ELEMENT_NODE && offset > 0) {
+            const prevNode = container.childNodes[offset - 1];
+            if (prevNode && prevNode.nodeType === Node.TEXT_NODE) {
+                textNode = prevNode;
+                offset = textNode.length;
             }
-            
-            if (textNode) {
-                const textBefore = textNode.textContent.substring(0, offset);
-                const match = textBefore.match(/ x(\d+)$/);
-                
-                if (match) {
-                    const numAnterior = parseInt(match[1]);
-                    const nuevoNum = numAnterior + 1;
-                    textoAInsertar = ` x${nuevoNum}`;
-                    
-                    // Reemplazar en el nodo de texto
-                    const startPos = match.index;
-                    const beforeMatch = textNode.textContent.substring(0, startPos);
-                    const afterCursor = textNode.textContent.substring(offset);
-                    
-                    textNode.textContent = beforeMatch + textoAInsertar + afterCursor;
-                    
-                    // Reposicionar cursor
-                    const newRange = document.createRange();
-                    newRange.setStart(textNode, beforeMatch.length + textoAInsertar.length);
-                    newRange.collapse(true);
-                    selection.removeAllRanges();
-                    selection.addRange(newRange);
-                    
-                    // Sincronizar con los datos de la sección
-                    const seccionDiv = acordeLinea.closest('.seccion');
-                    if (seccionDiv) {
-                        const seccionId = parseInt(seccionDiv.dataset.seccionId);
-                        const seccion = secciones.find(s => s.id === seccionId);
-                        const contentDiv = acordeLinea.closest('.acordes-content');
-                        if (seccion && contentDiv) {
-                            const lineas = [];
-                            contentDiv.querySelectorAll('.acorde-linea').forEach(linea => {
-                                lineas.push(linea.textContent);
-                            });
-                            seccion.acordes = lineas.join('\n');
-                        }
-                    }
-
-                    guardarTodasLasSecciones();
-                    actualizarVistaPrevia();
-                    return;
-                }
-            }
-            // Si no se encontró repetición previa, usamos " x2" por defecto
-            textoAInsertar = " x2";
         }
-
-        const seccionDiv = acordeLinea.closest('.seccion');
-        if (seccionDiv) {
-            const seccionId = parseInt(seccionDiv.dataset.seccionId);
-            const seccion = secciones.find(s => s.id === seccionId);
+        
+        if (textNode) {
+            const textBefore = textNode.textContent.substring(0, offset);
+            const match = textBefore.match(/ x(\d+)$/);
             
-            if (seccion) {
-                range.deleteContents();
-                const textNode = document.createTextNode(textoAInsertar);
-                range.insertNode(textNode);
-                range.setStartAfter(textNode);
-                range.collapse(true);
+            if (match) {
+                const numAnterior = parseInt(match[1]);
+                const nuevoNum = numAnterior + 1;
+                textoAInsertar = ` x${nuevoNum}`;
+                
+                const startPos = match.index;
+                const beforeMatch = textNode.textContent.substring(0, startPos);
+                const afterCursor = textNode.textContent.substring(offset);
+                
+                textNode.textContent = beforeMatch + textoAInsertar + afterCursor;
+                
+                const newRange = document.createRange();
+                newRange.setStart(textNode, beforeMatch.length + textoAInsertar.length);
+                newRange.collapse(true);
                 selection.removeAllRanges();
-                selection.addRange(range);
+                selection.addRange(newRange);
                 
-                // Actualizar el contenido de la sección
-                const contentDiv = acordeLinea.closest('.acordes-content');
-                if (contentDiv) {
-                    const lineas = [];
-                    contentDiv.querySelectorAll('.acorde-linea').forEach(linea => {
-                        lineas.push(linea.textContent);
-                    });
-                    seccion.acordes = lineas.join('\n');
+                const seccionDiv = acordeLinea.closest('.seccion');
+                if (seccionDiv) {
+                    const seccionId = seccionDiv.dataset.seccionId;
+                    const seccion = secciones.find(s => String(s.id) === String(seccionId));
+                    if (seccion) {
+                        const lineas = Array.from(seccionDiv.querySelectorAll('.acorde-linea')).map(l => obtenerTextoPlanoLinea(l));
+                        seccion.acordes = lineas.join('\n');
+                        guardarPosicionFoco();
+                        actualizarVistaPrevia();
+                        restaurarFoco();
+                        guardarEnLocalStorage();
+                        guardarHistorial();
+                    }
                 }
-                
-                // Forzar guardado de la nueva posición después de insertar
-                guardarPosicionFoco();
-                
-                // Guardar todas las secciones antes de reconstruir
-                guardarTodasLasSecciones();
-                
-                // Aplicar auto-formato condicionalmente
-                const btnFormato = document.getElementById('autoFormato');
-                if (btnFormato && btnFormato.checked) {
-                    seccion.acordes = formatearTextoAcordes(seccion.acordes);
-                }
-                
-                actualizarVistaPrevia();
-                guardarHistorial();
+                return;
             }
         }
+        textoAInsertar = " x2";
+    }
+
+    const seccionDiv = acordeLinea.closest('.seccion');
+    if (seccionDiv) {
+        const seccionId = seccionDiv.dataset.seccionId;
+        const seccion = secciones.find(s => String(s.id) === String(seccionId));
+
+        if (seccion) {
+            // Insertar el texto en el DOM
+            range.deleteContents();
+            const textNode = document.createTextNode(textoAInsertar);
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            // Sincronizar el contenido de toda la sección al array de secciones
+            const contentDiv = seccionDiv.querySelector('.acordes-content');
+            if (contentDiv) {
+                const lineas = Array.from(contentDiv.querySelectorAll('.acorde-linea')).map(l => obtenerTextoPlanoLinea(l));
+                seccion.acordes = lineas.join('\n');
+            }
+            
+            // Aplicar auto-formato si está activo
+            const btnFormato = document.getElementById('autoFormato');
+            if (btnFormato && btnFormato.checked) {
+                seccion.acordes = formatearTextoAcordes(seccion.acordes);
+            }
+            
+            // Guardar posición, re-renderizar y restaurar
+            guardarPosicionFoco();
+            actualizarVistaPrevia();
+            restaurarFoco();
+            
+            guardarEnLocalStorage();
+            guardarHistorial();
+        }
+    }
 }
+window.insertarEnSeccion = insertarEnSeccion;
 
 // Alias para compatibilidad con botones de creandoPieza.html
 function insertarSimbolo(texto) {
@@ -856,7 +1027,7 @@ function inicializarPaintCanvas(acordesElement) {
             canvas.style.width = rect.width + 'px';
             canvas.style.height = rect.height + 'px';
             
-            const seccionId = parseInt(acordesElement.dataset.seccionId);
+            const seccionId = String(acordesElement.dataset.seccionId);
             if (seccionId && paintData.has(seccionId)) {
                 const img = new Image();
                 img.onload = () => {
@@ -949,13 +1120,14 @@ function inicializarPaintCanvas(acordesElement) {
 function guardarPaintData(acordesElement) {
     const canvas = acordesElement.querySelector('.acordes-paint-canvas');
     if (canvas) {
-        const seccionId = parseInt(acordesElement.dataset.seccionId);
+        const seccionId = String(acordesElement.dataset.seccionId);
         if (seccionId) {
             const dataURL = canvas.toDataURL();
             paintData.set(seccionId, dataURL);
-            const seccion = secciones.find(s => s.id === seccionId);
+            const seccion = secciones.find(s => String(s.id) === String(seccionId));
             if (seccion) seccion.paintData = dataURL;
             guardarEnLocalStorage();
+            guardarHistorial();
         }
     }
 }
@@ -968,12 +1140,13 @@ function limpiarPaint(seccionId) {
             canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
             // IMPORTANTE: Limpiar los datos guardados para que no se restauren
             paintData.delete(seccionId);
-            const seccion = secciones.find(s => s.id === seccionId);
+            const seccion = secciones.find(s => String(s.id) === String(seccionId));
             if (seccion) seccion.paintData = null;
             
             mostrarNotificacion('Dibujo eliminado de esta sección', 'info');
             guardarTodasLasSecciones();
             actualizarVistaPrevia();
+            guardarHistorial();
         }
     }
 }
@@ -984,8 +1157,8 @@ function limpiarPaintActual() {
     const acordesElement = activeElement?.closest?.('.acordes');
     
     if (acordesElement) {
-        const seccionId = parseInt(acordesElement.dataset.seccionId);
-        seccionActiva = secciones.find(s => s.id === seccionId);
+        const seccionId = String(acordesElement.dataset.seccionId);
+        seccionActiva = secciones.find(s => String(s.id) === String(seccionId));
     }
     
     if (!seccionActiva && secciones.length > 0) {
@@ -1050,7 +1223,7 @@ function calcularTonalidad(acordesTexto) {
 
 function sugerirTonalidad() {
     const acordesTexto = Array.from(document.querySelectorAll('.acorde-linea'))
-        .map(linea => linea.textContent).join(' ');
+        .map(linea => obtenerTextoPlanoLinea(linea)).join(' ');
         
     const tonalidadGanadora = calcularTonalidad(acordesTexto);
     
@@ -1073,7 +1246,7 @@ function sugerirTonalidad() {
 }
 
 function sugerirTonalidadSeccion(seccionId) {
-    const seccion = secciones.find(s => s.id === seccionId);
+    const seccion = secciones.find(s => String(s.id) === String(seccionId));
     if (!seccion || !seccion.acordes) {
         mostrarNotificacion('Esta sección no tiene acordes', 'warning');
         return;
@@ -1082,6 +1255,7 @@ function sugerirTonalidadSeccion(seccionId) {
     if (seccion.tonalidadSugerida) {
         seccion.tonalidadSugerida = null;
         actualizarVistaPrevia();
+        guardarHistorial();
         return;
     }
     
@@ -1093,6 +1267,7 @@ function sugerirTonalidadSeccion(seccionId) {
     
     seccion.tonalidadSugerida = tonalidadGanadora;
     actualizarVistaPrevia();
+    guardarHistorial();
 }
 
 function buscarLetraEnLinea() {
@@ -1113,7 +1288,7 @@ function buscarLetraEnLinea() {
 // ==================== DUPLICACIÓN DE SECCIÓN ====================
 function duplicarSeccionParaInstrumento(seccionId) {
     if (confirm('¿Deseas agregar otro instrumento para esta sección?')) {
-        const seccionOriginal = secciones.find(s => s.id === seccionId);
+        const seccionOriginal = secciones.find(s => String(s.id) === String(seccionId));
         if (seccionOriginal) {
             agregarSeccion(`=${seccionOriginal.tipo}`);
         }
@@ -1125,7 +1300,7 @@ function transponerSeccion(seccionId, pasos) {
     // Primero guardamos lo que el usuario haya escrito en la interfaz
     guardarTodasLasSecciones();
 
-    const seccion = secciones.find(s => s.id === seccionId);
+    const seccion = secciones.find(s => String(s.id) === String(seccionId));
     if (!seccion) return;
     
     if (!seccion.acordes.trim()) return;
@@ -1250,6 +1425,10 @@ function agregarEventListenersEditables() {
         // Agregar blur para formatear
         linea.removeEventListener('blur', handleAcordeBlur);
         linea.addEventListener('blur', handleAcordeBlur);
+
+        // Agregar focus para desformatear (volver a texto plano)
+        linea.removeEventListener('focus', handleAcordeFocus);
+        linea.addEventListener('focus', handleAcordeFocus);
     });
     
     // Manejar títulos de sección
@@ -1269,13 +1448,12 @@ function agregarEventListenersEditables() {
 // Guardar el contenido actual de todas las secciones antes de reconstruir
 function guardarTodasLasSecciones() {
     document.querySelectorAll('.seccion').forEach(seccionDiv => {
-        const seccionId = parseInt(seccionDiv.dataset.seccionId);
-        const seccion = secciones.find(s => s.id === seccionId);
-        
-        if (seccion) {
-            const contentDiv = seccionDiv.querySelector('.acordes-content');
+        const seccionId = seccionDiv.dataset.seccionId;
+        const seccion = secciones.find(s => String(s.id) === String(seccionId));
+
+        if (seccion) {            const contentDiv = seccionDiv.querySelector('.acordes-content');
             if (contentDiv) {
-                const lineas = Array.from(contentDiv.querySelectorAll('.acorde-linea')).map(l => l.textContent);
+                const lineas = Array.from(contentDiv.querySelectorAll('.acorde-linea')).map(l => obtenerTextoPlanoLinea(l));
                 seccion.acordes = lineas.join('\n');
             }
             
@@ -1322,10 +1500,10 @@ function handleAcordeInput(e) {
     }
 
     if (contentDiv && seccionDiv) {
-        const seccionId = parseInt(seccionDiv.dataset.seccionId);
-        const seccion = secciones.find(s => s.id === seccionId);
+        const seccionId = seccionDiv.dataset.seccionId;
+        const seccion = secciones.find(s => String(s.id) === String(seccionId));
         if (seccion) {
-            const lineas = Array.from(contentDiv.querySelectorAll('.acorde-linea')).map(l => l.textContent);
+            const lineas = Array.from(contentDiv.querySelectorAll('.acorde-linea')).map(l => obtenerTextoPlanoLinea(l));
             seccion.acordes = lineas.join('\n');
         }
     }
@@ -1335,8 +1513,8 @@ function handleTituloInput(e) {
     const titulo = e.target;
     const seccionDiv = titulo.closest('.seccion');
     if (seccionDiv) {
-        const seccionId = parseInt(seccionDiv.dataset.seccionId);
-        const seccion = secciones.find(s => s.id === seccionId);
+        const seccionId = seccionDiv.dataset.seccionId;
+        const seccion = secciones.find(s => String(s.id) === String(seccionId));
         if (seccion) {
             const texto = titulo.textContent.trim();
             const partes = texto.split(' ');
@@ -1351,32 +1529,33 @@ function handleAcordeBlur(e) {
     const linea = e.target;
     const contentDiv = linea.closest('.acordes-content');
     const seccionDiv = linea.closest('.seccion');
-    
+
     if (contentDiv && seccionDiv) {
-        const seccionId = parseInt(seccionDiv.dataset.seccionId);
-        const seccion = secciones.find(s => s.id === seccionId);
-        if (seccion) {
-            // Guardar estado actual
+        const seccionId = seccionDiv.dataset.seccionId;
+        const seccion = secciones.find(s => String(s.id) === String(seccionId));
+        if (seccion) {            // Guardar estado actual
             guardarTodasLasSecciones();
             
             const btnFormato = document.getElementById('autoFormato');
+            let formateado = seccion.acordes;
             if (btnFormato && btnFormato.checked) {
-                const formateado = formatearTextoAcordes(seccion.acordes);
-                if (formateado !== seccion.acordes) {
-                    seccion.acordes = formateado;
-                    
-                    // Re-renderizar solo esta sección para no perder el foco global
-                    const nuevasLineas = formateado.split('\n');
-                    contentDiv.innerHTML = '';
-                    nuevasLineas.forEach(l => {
-                        const div = document.createElement('div');
-                        div.className = 'acorde-linea';
-                        div.textContent = l || ' ';
-                        contentDiv.appendChild(div);
-                    });
-                    agregarEventListenersEditables();
-                }
+                formateado = formatearTextoAcordes(seccion.acordes);
+                seccion.acordes = formateado;
             }
+            
+            // Re-renderizar siempre al desenfocar para aplicar/actualizar los badges
+            const nuevasLineas = formateado.split('\n');
+            contentDiv.innerHTML = '';
+            nuevasLineas.forEach(l => {
+                const div = document.createElement('div');
+                div.className = 'acorde-linea';
+                const lText = l || ' ';
+                div.setAttribute('data-raw', lText);
+                div.innerHTML = formatearLineasConBadges(lText);
+                contentDiv.appendChild(div);
+            });
+            agregarEventListenersEditables();
+            guardarHistorial();
         }
     }
 }
@@ -1399,7 +1578,7 @@ function guardarPosicionFoco() {
         if (linea) {
             const seccionDiv = linea.closest('.seccion');
             if (seccionDiv) {
-                ultimaSeccionFocoId = parseInt(seccionDiv.dataset.seccionId);
+                ultimaSeccionFocoId = String(seccionDiv.dataset.seccionId);
                 const lineas = Array.from(seccionDiv.querySelectorAll('.acorde-linea'));
                 ultimaLineaFocoIndice = lineas.indexOf(linea);
                 
@@ -1622,8 +1801,9 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
                 enSeccion = false;
             } else if (line.startsWith('### ') && !enLetra) {
                 if (lineaActual.trim() && tipoSeccion) {
+                    const newId = Date.now() + seccionesImportadas.length + Math.floor(Math.random() * 1000);
                     seccionesImportadas.push({
-                        id: Date.now() + seccionesImportadas.length,
+                        id: newId,
                         tipo: tipoSeccion,
                         acordes: lineaActual.trim(),
                         paintData: null,
@@ -1661,8 +1841,9 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
         }
         
         if (lineaActual.trim() && tipoSeccion) {
+            const finalId = Date.now() + seccionesImportadas.length + Math.floor(Math.random() * 1000);
             seccionesImportadas.push({
-                id: Date.now() + seccionesImportadas.length,
+                id: finalId,
                 tipo: tipoSeccion,
                 acordes: lineaActual.trim(),
                 paintData: null,
@@ -1694,6 +1875,7 @@ document.getElementById('importarMarkdown').addEventListener('change', function(
         
         secciones = seccionesImportadas;
         actualizarVistaPrevia();
+        guardarEnLocalStorage();
         mostrarNotificacion('Archivo importado correctamente', 'success');
     };
     
@@ -1891,6 +2073,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (element) element.addEventListener('input', () => {
             actualizarVistaPrevia();
             guardarEnLocalStorage();
+            guardarHistorial();
         });
     });
     
@@ -1898,6 +2081,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (autoFormato) autoFormato.addEventListener('change', () => {
         aplicarFormatoGlobal();
         guardarEnLocalStorage();
+        guardarHistorial();
     });
     
     const colorPicker = document.getElementById('paintColorPickerBarra');
@@ -1908,18 +2092,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Mostrar barra flotante al hacer clic o tocar secciones de acordes
     const handleShowBarra = (e) => {
-        if (e.target.closest('.acordes')) {
+        const acordeDiv = e.target.closest('.acordes');
+        if (acordeDiv) {
             console.log('Mostrando barra flotante...');
             mostrarBarraFlotante();
+            
+            // Actualizar siempre el foco a la sección donde se hizo clic
+            const seccionDiv = acordeDiv.closest('.seccion');
+            if (seccionDiv) {
+                const newId = String(seccionDiv.dataset.seccionId);
+                if (ultimaSeccionFocoId !== newId) {
+                    ultimaSeccionFocoId = newId;
+                    ultimaLineaFocoIndice = 0;
+                    ultimoOffsetFoco = 0;
+                }
+            }
         }
     };
 
     document.addEventListener('click', handleShowBarra);
     
     // Evitar que los botones de la barra flotante roben el foco del input
-    document.querySelectorAll('.barra-flotante button').forEach(btn => {
-        btn.addEventListener('mousedown', e => e.preventDefault());
-    });
+    const barraFlotante = document.getElementById('barraFlotanteContainer');
+    if (barraFlotante) {
+        barraFlotante.addEventListener('mousedown', e => {
+            const btn = e.target.closest('button');
+            if (btn) {
+                e.preventDefault();
+            }
+        });
+    }
 
     // Inicializar piano si existe
     const pianoContainer = document.getElementById('pianoContainer');
@@ -2201,7 +2403,7 @@ function expandirRepeticiones(linea) {
 }
 
 function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
-    const seccion = secciones.find(s => s.id === seccionId);
+    const seccion = secciones.find(s => String(s.id) === String(seccionId));
     if (!seccion || !seccion.acordes.trim()) {
         if (inicioRetraso === 0) mostrarNotificacion('La sección está vacía', 'warning');
         return 0;
@@ -2295,17 +2497,11 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
             
             let ultimoCompasReal = null;
 
-            compases.forEach(compas => {
-                // Lógica de repetición de compás (%)
-                if (compas === '%' && ultimoCompasReal) {
-                    compas = ultimoCompasReal;
-                } else if (compas !== '%') {
-                    ultimoCompasReal = compas;
-                }
-
+            // Función auxiliar para procesar un compás individual
+            const procesarCompas = (compas, tiempoOffset) => {
                 // Tokens que no son guiones decorativos individuales, pero permiten -- (silencio)
                 const tokensRaw = compas.split(/\s+/).filter(t => t.trim() !== '' && t !== '-');
-                if (tokensRaw.length === 0) return;
+                if (tokensRaw.length === 0) return 0;
 
                 // Mapear tokens a objetos con peso (1 + cantidad de puntos)
                 const tokensProcesados = tokensRaw.map(t => {
@@ -2316,12 +2512,13 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
                 });
 
                 const pesoTotalCompas = tokensProcesados.reduce((sum, t) => sum + t.peso, 0);
+                let tiempoLocal = tiempoOffset;
                 
                 tokensProcesados.forEach((tokenObj) => {
                     const numBeatsToken = (tokenObj.peso / pesoTotalCompas) * beatsPorCompasEfectivo;
                     
                     for (let b = 0; b < numBeatsToken; b++) {
-                        const tiempoDeEsteBeat = inicioRetraso + tiempoRelativo;
+                        const tiempoDeEsteBeat = inicioRetraso + tiempoLocal;
 
                         if (tokenObj.texto !== '--') {
                             const match = tokenObj.texto.match(/^([CDEFGAB][#b]?)(m|dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?(maj7|m7|7|9|11|13)?(?:\/([CDEFGAB][#b]?))?$/i);
@@ -2356,9 +2553,35 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
                             window._playbackTimers.push(tId);
                         }
                         
-                        tiempoRelativo += tiempoPorBeat;
+                        tiempoLocal += tiempoPorBeat;
                     }
                 });
+                
+                return pesoTotalCompas * tiempoPorBeat;
+            };
+
+            compases.forEach(compas => {
+                // Lógica de repetición de compás (%)
+                if (compas === '%' && ultimoCompasReal) {
+                    compas = ultimoCompasReal;
+                } else if (compas !== '%') {
+                    // Lógica de repetición por número (ej: "1", "2", "6")
+                    // Si el compás es solo un número, repite el anterior esa cantidad de veces
+                    const matchNumero = compas.match(/^(\d+)$/);
+                    if (matchNumero && ultimoCompasReal) {
+                        const repeticiones = parseInt(matchNumero[1]);
+                        // Repetir el último compás real N veces
+                        for (let r = 0; r < repeticiones; r++) {
+                            const duracion = procesarCompas(ultimoCompasReal, tiempoRelativo);
+                            tiempoRelativo += duracion;
+                        }
+                        return; // Saltar el procesamiento normal de este compás
+                    }
+                    ultimoCompasReal = compas;
+                }
+
+                const duracion = procesarCompas(compas, tiempoRelativo);
+                tiempoRelativo += duracion;
             });
         } else {
             // Modo notas sueltas (1 beat cada una)
