@@ -300,8 +300,8 @@ function formatearTextoAcordes(texto) {
         });
 
         // Regla: Unir números solitarios con la barra anterior (ej: "| 2" -> "|2")
-        // Solo si el número no está precedido por una nota de acorde (como A7)
-        linea = linea.replace(/\|\s+(\d+)/g, '|$1');
+        // Solo si el número es un token independiente (separado por espacios)
+        linea = linea.replace(/\|\s+(\d+)(?=\s|$)/g, '|$1');
 
         // Normalizar espacios alrededor de barras de compás y colapsar espacios múltiples
         linea = linea.replace(/\s{2,}/g, ' '); // Colapsar múltiples espacios a uno solo
@@ -368,93 +368,26 @@ function formatearLineasConBadges(lineaTexto) {
     if (!lineaTexto || !lineaTexto.trim()) return '&nbsp;';
     let htmlEscapado = escapeHtml(lineaTexto);
     
-    // Buscar notas base (C, D, E, F, G, A, B) seguidas de sostenido (#, ♯) o bemol (b, ♭)
-    // También buscar sostenidos, bemoles y símbolos especiales (𝄌) aislados para convertirlos en badges
-    htmlEscapado = htmlEscapado.replace(/([CDEFGAB])?([#b♭♯𝄌])/g, (match, nota, simbolo) => {
-        let simboloMostrar = simbolo;
-        
-        if (simbolo === 'b' || simbolo === '♭') {
-            simboloMostrar = '♭';
-        } else if (simbolo === '#' || simbolo === '♯') {
-            simboloMostrar = '♯';
-        }
-        
-        if (nota) {
-            return `${nota}<span class="music-badge">${simboloMostrar}</span>`;
-        } else {
-            return `<span class="music-badge">${simboloMostrar}</span>`;
-        }
-    });
-
-    // Reemplazar [badge-color:Texto] con la estructura de span de Bootstrap
-    htmlEscapado = htmlEscapado.replace(/\[badge-([a-z]+):(.*?)\]/g, (match, color, texto) => {
-        let textColorClass = '';
-        if (color === 'warning' || color === 'info' || color === 'light') {
-            textColorClass = ' text-dark';
-        }
-        return `<span class="badge bg-${color}${textColorClass} mx-1">${texto}</span>`;
-    });
-
-    // Reemplazar [badge:Texto] por defecto con color primary
-    htmlEscapado = htmlEscapado.replace(/\[badge:(.*?)\]/g, (match, texto) => {
-        return `<span class="badge bg-primary mx-1">${texto}</span>`;
-    });
+    // Normalizar símbolos de música visualmente sin usar etiquetas span especiales
+    htmlEscapado = htmlEscapado.replace(/#/g, '♯').replace(/b/g, '♭');
+    
+    // Soporte básico para etiquetas de badge heredadas (solo texto plano ahora)
+    htmlEscapado = htmlEscapado.replace(/\[badge-([a-z]+):(.*?)\]/g, '$2');
+    htmlEscapado = htmlEscapado.replace(/\[badge:(.*?)\]/g, '$1');
     
     return htmlEscapado;
 }
 
 function handleAcordeFocus(e) {
     const linea = e.target;
-    if (linea.querySelector('.badge') || linea.hasAttribute('data-raw')) {
-        const selection = window.getSelection();
-        let offset = 0;
-        const rawText = linea.getAttribute('data-raw') || linea.textContent;
-        
-        if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            const container = range.startContainer;
-            
-            let totalOffset = 0;
-            const walk = document.createTreeWalker(linea, NodeFilter.SHOW_TEXT, null, false);
-            let n;
-            let found = false;
-            while (n = walk.nextNode()) {
-                if (n === container) {
-                    totalOffset += range.startOffset;
-                    found = true;
-                    break;
-                }
-                totalOffset += n.textContent.length;
-            }
-            if (found) {
-                offset = totalOffset;
-            } else {
-                offset = rawText.length;
-            }
-        }
-        
-        linea.textContent = rawText;
-        linea.removeAttribute('data-raw');
-        
-        // Restaurar posición del cursor
-        const range = document.createRange();
-        const sel = window.getSelection();
-        let n = linea.firstChild;
-        if (n && n.nodeType === Node.TEXT_NODE) {
-            range.setStart(n, Math.min(offset, n.textContent.length));
-            range.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(range);
-        }
-    }
+    // Ya no hay badges que quitar, solo nos aseguramos de que el texto sea editable libremente
+    linea.dataset.editing = 'true';
 }
 
 function obtenerTextoPlanoLinea(lineaElement) {
     if (!lineaElement) return '';
-    if (lineaElement.hasAttribute('data-raw')) {
-        return lineaElement.getAttribute('data-raw');
-    }
-    return lineaElement.textContent.replace(/♯/g, '#').replace(/♭/g, 'b');
+    // Normalizar símbolos de música a texto plano para guardar
+    return lineaElement.textContent.replace(/♯/g, '#').replace(/♭/g, 'b').replace(/\u00A0/g, ' ').trim();
 }
 
 // ==================== FUNCIONES PRINCIPALES ====================
@@ -741,10 +674,10 @@ function actualizarVistaPrevia() {
                     const lineas = seccion.acordes.split('\n');
                     lineas.forEach(linea => {
                         const lTrim = linea.trim() || ' ';
-                        html += `<div class="acorde-linea" data-raw="${escapeHtml(lTrim)}">${formatearLineasConBadges(lTrim)}</div>`;
+                        html += `<div class="acorde-linea">${formatearLineasConBadges(lTrim)}</div>`;
                     });
                 } else {
-                    html += `<div class="acorde-linea" data-raw=" ">&nbsp;</div>`;
+                    html += `<div class="acorde-linea">&nbsp;</div>`;
                 }
                 
                 html += `</div>
@@ -929,33 +862,26 @@ function insertarEnSeccion(texto, omitirModal = false) {
         const seccion = secciones.find(s => String(s.id) === String(seccionId));
 
         if (seccion) {
-            // Insertar el texto en el DOM
+            // Insertar el texto en el DOM directamente
             range.deleteContents();
             const textNode = document.createTextNode(textoAInsertar);
             range.insertNode(textNode);
+            
+            // Mover el cursor al final de lo insertado
             range.setStartAfter(textNode);
             range.collapse(true);
             selection.removeAllRanges();
             selection.addRange(range);
 
-            // Sincronizar el contenido de toda la sección al array de secciones
+            // Sincronizar el contenido de toda la sección al array de secciones desde el DOM
             const contentDiv = seccionDiv.querySelector('.acordes-content');
             if (contentDiv) {
                 const lineas = Array.from(contentDiv.querySelectorAll('.acorde-linea')).map(l => obtenerTextoPlanoLinea(l));
                 seccion.acordes = lineas.join('\n');
             }
             
-            // Aplicar auto-formato si está activo
-            const btnFormato = document.getElementById('autoFormato');
-            if (btnFormato && btnFormato.checked) {
-                seccion.acordes = formatearTextoAcordes(seccion.acordes);
-            }
-            
-            // Guardar posición, re-renderizar y restaurar
+            // NO llamar a actualizarVistaPrevia() para no destruir lo que el usuario ve
             guardarPosicionFoco();
-            actualizarVistaPrevia();
-            restaurarFoco();
-            
             guardarEnLocalStorage();
             guardarHistorial();
         }
@@ -1469,42 +1395,49 @@ function guardarTodasLasSecciones() {
 }
 
 function handleAcordeInput(e) {
-    const linea = e.target;
-    const contentDiv = linea.closest('.acordes-content');
-    const seccionDiv = linea.closest('.seccion');
+    const target = e.target;
+    const contentDiv = target.closest('.acordes-content');
+    const seccionDiv = target.closest('.seccion');
+    const linea = target.closest('.acorde-linea');
     
-    // Detectar si se acaba de escribir → (o si se pegó)
-    const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const textNode = range.startContainer;
-        if (textNode.nodeType === Node.TEXT_NODE) {
-            const offset = range.startOffset;
-            const lastChar = textNode.textContent.substring(offset - 1, offset);
-            
-            if (lastChar === '→') {
-                // Quitar el símbolo recién escrito para manejarlo vía modal
-                const before = textNode.textContent.substring(0, offset - 1);
-                const after = textNode.textContent.substring(offset);
-                textNode.textContent = before + after;
-                
-                // Reposicionar cursor donde estaba el símbolo
-                range.setStart(textNode, offset - 1);
-                range.collapse(true);
-                
-                abrirModalTransicion((nuevoTexto) => {
-                    insertarEnSeccion(nuevoTexto, true);
-                });
-            }
-        }
+    // Si el usuario está editando manualmente, el data-raw queda invalidado
+    if (linea && linea.hasAttribute('data-raw')) {
+        linea.removeAttribute('data-raw');
     }
 
     if (contentDiv && seccionDiv) {
+        // Detectar si se acaba de escribir → (o si se pegó)
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const textNode = range.startContainer;
+            if (textNode.nodeType === Node.TEXT_NODE) {
+                const offset = range.startOffset;
+                const lastChar = textNode.textContent.substring(offset - 1, offset);
+                
+                if (lastChar === '→') {
+                    // Quitar el símbolo recién escrito para manejarlo vía modal
+                    const before = textNode.textContent.substring(0, offset - 1);
+                    const after = textNode.textContent.substring(offset);
+                    textNode.textContent = before + after;
+                    
+                    // Reposicionar cursor donde estaba el símbolo
+                    range.setStart(textNode, offset - 1);
+                    range.collapse(true);
+                    
+                    abrirModalTransicion((nuevoTexto) => {
+                        insertarEnSeccion(nuevoTexto, true);
+                    });
+                }
+            }
+        }
+
         const seccionId = seccionDiv.dataset.seccionId;
         const seccion = secciones.find(s => String(s.id) === String(seccionId));
         if (seccion) {
             const lineas = Array.from(contentDiv.querySelectorAll('.acorde-linea')).map(l => obtenerTextoPlanoLinea(l));
             seccion.acordes = lineas.join('\n');
+            guardarEnLocalStorage(); // Asegurar persistencia en cada cambio
         }
     }
 }
@@ -1531,31 +1464,21 @@ function handleAcordeBlur(e) {
     const seccionDiv = linea.closest('.seccion');
 
     if (contentDiv && seccionDiv) {
+        linea.removeAttribute('data-editing');
         const seccionId = seccionDiv.dataset.seccionId;
         const seccion = secciones.find(s => String(s.id) === String(seccionId));
-        if (seccion) {            // Guardar estado actual
-            guardarTodasLasSecciones();
+        if (seccion) {
+            // Sincronizar estado actual
+            const lineas = Array.from(contentDiv.querySelectorAll('.acorde-linea')).map(l => obtenerTextoPlanoLinea(l));
+            seccion.acordes = lineas.join('\n');
             
             const btnFormato = document.getElementById('autoFormato');
-            let formateado = seccion.acordes;
             if (btnFormato && btnFormato.checked) {
-                formateado = formatearTextoAcordes(seccion.acordes);
-                seccion.acordes = formateado;
+                seccion.acordes = formatearTextoAcordes(seccion.acordes);
             }
             
-            // Re-renderizar siempre al desenfocar para aplicar/actualizar los badges
-            const nuevasLineas = formateado.split('\n');
-            contentDiv.innerHTML = '';
-            nuevasLineas.forEach(l => {
-                const div = document.createElement('div');
-                div.className = 'acorde-linea';
-                const lText = l || ' ';
-                div.setAttribute('data-raw', lText);
-                div.innerHTML = formatearLineasConBadges(lText);
-                contentDiv.appendChild(div);
-            });
-            agregarEventListenersEditables();
             guardarHistorial();
+            guardarEnLocalStorage();
         }
     }
 }
@@ -1927,6 +1850,36 @@ function cargarDesdeLocalStorage() {
     } catch (e) {
         console.error("Error cargando de LocalStorage:", e);
     }
+}
+
+function limpiarTodo() {
+    if (!confirm('¿Estás seguro de que quieres limpiar todo? Esta acción borrará todos los datos y no se puede deshacer.')) {
+        return;
+    }
+
+    // Limpiar campos del formulario
+    document.getElementById('nombrePieza').value = '';
+    document.getElementById('artista').value = '';
+    document.getElementById('album').value = '';
+    document.getElementById('genero').value = '';
+    document.getElementById('tiempo').value = '';
+    document.getElementById('tonalidad').value = '';
+    document.getElementById('letra').value = '';
+    document.getElementById('incluirLetra').checked = false;
+    document.getElementById('autoFormato').checked = false;
+    document.getElementById('exportarCompleta').checked = true;
+
+    // Limpiar arrays y datos
+    secciones = [];
+    paintData.clear();
+    historialUndo = [];
+
+    // Limpiar localStorage
+    localStorage.removeItem('composerStudio_save');
+
+    // Actualizar vista
+    actualizarVistaPrevia();
+    mostrarNotificacion('Todo ha sido limpiado correctamente', 'success');
 }
 
 // ==================== UTILIDADES ====================
@@ -2521,7 +2474,7 @@ function tocarSeccionEnPiano(seccionId, inicioRetraso = 0) {
                         const tiempoDeEsteBeat = inicioRetraso + tiempoLocal;
 
                         if (tokenObj.texto !== '--') {
-                            const match = tokenObj.texto.match(/^([CDEFGAB][#b]?)(m|dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?(maj7|m7|7|9|11|13)?(?:\/([CDEFGAB][#b]?))?$/i);
+                            const match = tokenObj.texto.match(/^([CDEFGAB][#b♭♯]?)(m|maj|min|dim|aug|sus|add|no)?\d*(maj7|m7|maj9|m9|7|9|11|13|sus2|sus4|sus|add9|no5|b5|#5|b9|#9|#11|b13)?(?:\/([CDEFGAB][#b♭♯]?))?$/i);
                             
                             if (match) {
                                 const notaBase = match[1].toUpperCase();
