@@ -250,7 +250,8 @@ function formatearTextoAcordes(texto) {
     const acordePattern = '[CDEFGAB][#b]?m?(?:dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?';
     
     // Regla 1: Unir bajos (quitar espacios alrededor de /)
-    const rule1Regex = new RegExp(`(${acordePattern})\\s*\\/\\s*(${acordePattern})`, 'gi');
+    // Se ha flexibilizado para que una cualquier contenido no vacío separado por /
+    const rule1Regex = /([^\s/|]+)\s*\/\s*([^\s/|]+)/gi;
     
     // Regla 2: Separar acordes en un compás con guion
     const rule2Regex = new RegExp(`(^|\\s|\\|\\s*)(${acordePattern}(?:\\/${acordePattern})?)\\s+(${acordePattern}(?:\\/${acordePattern})?)(?=\\s|$|\\|)`, 'gi');
@@ -309,6 +310,7 @@ function formatearTextoAcordes(texto) {
         linea = linea.replace(/\s+\|/g, ' |'); // Máximo un espacio antes de |
         linea = linea.trim();
 
+        // Aplicamos la unión de bajos
         linea = linea.replace(rule1Regex, '$1/$2');
         
         let antes = "";
@@ -326,7 +328,8 @@ function unformatearTextoAcordes(texto) {
     const acordePattern = '[CDEFGAB][#b]?m?(?:dim|aug|maj7|m7|7|9|11|13|sus2|sus4)?';
     
     // Invertir Regla 1: D#/Em -> D# / Em
-    const rule1Regex = new RegExp(`(${acordePattern})\\/(${acordePattern})`, 'gi');
+    // También se flexibiliza para la inversión
+    const rule1Regex = /([^\s/|]+)\/([^\s/|]+)/gi;
     
     // Invertir Regla 2: A - B -> A B
     const rule2Regex = new RegExp(`(${acordePattern}(?:\\/${acordePattern})?)\\s+-\\s+(${acordePattern}(?:\\/${acordePattern})?)`, 'gi');
@@ -1567,7 +1570,29 @@ function restaurarFoco() {
 }
 
 // ==================== EXPORTACIONES ====================
+function validarContenidoExportacion() {
+    const hayTextoFormulario = [
+        'nombrePieza', 'artista', 'album', 'genero', 'letra'
+    ].some(id => document.getElementById(id)?.value.trim() !== '');
+
+    const hayConfiguracion = [
+        'tiempo', 'tonalidad'
+    ].some(id => document.getElementById(id)?.value !== '');
+
+    const haySeccionesConContenido = secciones.some(s => s.acordes.trim() !== '');
+    
+    const hayDibujos = typeof paintData !== 'undefined' && paintData.size > 0;
+
+    if (!hayTextoFormulario && !hayConfiguracion && !haySeccionesConContenido && !hayDibujos) {
+        mostrarNotificacion('No se puede exportar: la partitura está vacía.', 'warning');
+        return false;
+    }
+    return true;
+}
+
 function exportarMarkdown() {
+    if (!validarContenidoExportacion()) return;
+    
     const nombre = document.getElementById('nombrePieza').value || 'Sin_titulo';
     const incluirLetra = document.getElementById('incluirLetra').checked;
     
@@ -1598,7 +1623,8 @@ function exportarMarkdown() {
         if (seccion.tonalidadSugerida) meta.push(`**Tonalidad:** ${seccion.tonalidadSugerida}`);
         if (seccion.modoPiano) meta.push(`**Reproducción:** ${seccion.modoPiano}`);
 
-        if (meta.length > 0) {            contenido += meta.join(' | ') + '\n';
+        if (meta.length > 0) {
+            contenido += meta.join(' | ') + '\n';
         }
         contenido += '\n';
 
@@ -1612,10 +1638,12 @@ function exportarMarkdown() {
 }
 
 async function exportarImagen() {
+    if (!validarContenidoExportacion()) return;
     await exportarComoImagen('image/png', '.png');
 }
 
 async function exportarPDF() {
+    if (!validarContenidoExportacion()) return;
     const element = document.getElementById('vistaPrevia');
     const exportarCompleta = document.getElementById('exportarCompleta').checked;
     
