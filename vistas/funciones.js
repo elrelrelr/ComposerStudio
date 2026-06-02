@@ -538,7 +538,7 @@ function abrirModalMelodia() {
 
     modal.show();
 }
-    function cambiarModoPianoSeccion(id) {
+function cambiarModoPianoSeccion(id) {
     const seccion = secciones.find(s => String(s.id) === String(id));
     if (!seccion) return;
 
@@ -546,7 +546,8 @@ function abrirModalMelodia() {
     mostrarNotificacion(`Modo de reproducción cambiado a: ${seccion.modoPiano === 'acorde' ? 'Acordes' : 'Notas individuales'}`, 'info');
     actualizarVistaPrevia();
     guardarHistorial();
-    }
+}
+
 function cambiarTiempoSeccion(id) {
     const seccion = secciones.find(s => String(s.id) === String(id));
     if (!seccion) return;
@@ -561,13 +562,12 @@ function cambiarTiempoSeccion(id) {
     mostrarNotificacion(`Compás de la sección actualizado a: ${siguiente}`, 'info');
     actualizarVistaPrevia();
     guardarHistorial();
-    }
+}
 
-    function cambiarBpmSeccion(id) {
+function cambiarBpmSeccion(id) {
     const seccion = secciones.find(s => String(s.id) === String(id));
     if (!seccion) return;
 
-    // Rotar BPM: Global -> 60 -> 80 -> 100 -> 120 -> 140 -> 160
     const opciones = ["Global", 60, 80, 100, 120, 140, 160];
     const actual = seccion.bpm || "Global";
     let siguienteIdx = (opciones.indexOf(actual) + 1) % opciones.length;
@@ -578,7 +578,7 @@ function cambiarTiempoSeccion(id) {
     mostrarNotificacion(`BPM de la sección actualizado a: ${siguiente}`, 'info');
     actualizarVistaPrevia();
     guardarHistorial();
-    }
+}
 function eliminarSeccion(id) {
     guardarTodasLasSecciones();
     secciones = secciones.filter(s => String(s.id) !== String(id));
@@ -2334,11 +2334,6 @@ function insertarAcordePiano(modificador = '') {
     initAudio();
     acordePendiente = modificador;
     mostrarNotificacion(`Modo: Insertar acorde ${modificador || 'mayor'} - Toca una tecla`, 'info');
-}
-
-function resetAcordePiano() {
-    acordePendiente = null;
-    mostrarNotificacion('Modo: Solo tocar (reproducción simple)', 'info');
 }
 
 // ==================== REPRODUCCIÓN EN PIANO ====================

@@ -227,16 +227,6 @@ body {
     cursor: pointer;
 }
 
-.btn-group-paint {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: rgba(0, 0, 0, 0.05);
-    padding: 10px;
-    border-radius: 8px;
-    margin-top: 5px;
-}
-
 #paintBrushSizeBarra {
     cursor: pointer;
     accent-color: #764ba2;
@@ -480,19 +470,10 @@ body.export-mode #barraFlotanteContainer {
     display: flex;
     gap: 8px;
     align-items: center;
-}
-
-.paint-color-picker-barra {
-    width: 40px;
-    height: 40px;
-    border: 2px solid #dee2e6;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 10px;
     border-radius: 8px;
-    cursor: pointer;
-}
-
-.paint-brush-size-barra {
-    flex: 1;
-    min-width: 80px;
+    margin-top: 5px;
 }
 
 /* Animaciones */
